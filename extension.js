@@ -12,6 +12,15 @@ function get_dir_path(file_path){
 	return file_path.substring(0, file_path.lastIndexOf("/"));
 }
 
+const fileIcons = {
+    "py": path.join(__dirname, "icons", "py.svg"),
+    "rb": path.join(__dirname, "icons", "rb.svg"),
+    "go": path.join(__dirname, "icons", "go.svg"),
+    "java": path.join(__dirname, "icons", "java.svg"),
+    "js": path.join(__dirname, "icons", "js.svg"),
+    "ts": path.join(__dirname, "icons", "ts.svg"),
+};
+
 function activate(context) {
 	console.log("Function Search Extension Activated");
 
@@ -29,45 +38,29 @@ function activate(context) {
 			return;
 		}
 
-		const fileIcons = {
-			"py": "$(file-code) ",        // Generic code icon (Python lacks a built-in icon)
-			"rb": "$(ruby) ",             // Ruby-specific icon
-			"go": "$(symbol-struct) ",    // Go functions often belong to structs
-			"java": "$(symbol-class) ",   // Java methods belong to classes
-			"js": "$(symbol-function) ",  // JavaScript functions
-			"ts": "$(symbol-interface) ", // TypeScript functions, often in interfaces
-		};
-		
-
 		let matchingExtentionFunctions = []
 		let otherExtentionFunctions = []
 
 		for (const [file, functions] of Object.entries(functionIndex)) {
-			const extension = getExtentionFromFilePath(file);  // Get the file extension
-			const icon = fileIcons[extension] || "$(file-code) "; // Default to code icon if no match
-			if(extension == currentFileExtention){
-				functions.forEach(f => {
-					matchingExtentionFunctions.push({
-						label: `${icon}${f.name}`, // Add icon before function name
-						description: `${f.relativeFilePath}:${f.line}`,
-						file: file,
-						line: f.line,
-						function_name: `${f.name}`, // Add icon before function name
-					});
-				});	
-			} else {
-				functions.forEach(f => {
-					otherExtentionFunctions.push({
-						label: `${icon}${f.name}`, // Add icon before function name
-						description: `${f.relativeFilePath}:${f.line}`,
-						file: file,
-						line: f.line,
-						function_name: `${f.name}`, // Add icon before function name
-					});
-				});	
-			}
+			const extension = getExtentionFromFilePath(file);  
+			const iconPath = fileIcons[extension] ? vscode.Uri.file(fileIcons[extension]) : undefined;
+	
+			functions.forEach(f => {
+				const item = {
+					label: f.name,
+					description: `${f.relativeFilePath}:${f.line}`,
+					file: file,
+					line: f.line,
+					function_name: f.name,
+					iconPath: iconPath // Attach custom icon
+				};
+				if (extension == currentFileExtention) {
+					matchingExtentionFunctions.push(item);
+				} else {
+					otherExtentionFunctions.push(item);
+				}
+			});
 		}
-
 		const allFunctions = matchingExtentionFunctions.concat(otherExtentionFunctions)
 		const selectedFunction = await vscode.window.showQuickPick(allFunctions, { placeHolder: "Search a function by name" });
 

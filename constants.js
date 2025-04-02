@@ -1,11 +1,13 @@
 const functionRegexMap = {
-    "py": [/^\s*def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*/, 1],
-    "rb": [/^\s*def\s+(self.)?([a-zA-Z_][a-zA-Z0-9_!?]*)\s*/, 2],
-    "go": [/^\s*func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 1],
-    "java": [/^\s*(public|private|protected)?\s*(static\s+)?[\w<>\[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 3],
-    "js": [/^\s*(async\s+)?function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 2],
-    "ts": [/^\s*(async\s+)?function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 2],
+    "py": [/^\s*def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 1],
+    "rb": [/^\s*def\s+(?:self\.)?([a-zA-Z_][a-zA-Z0-9_!?]*)\s*\(/, 1],
+    "go": [/^\s*func\s+(?:\([\w\s,*]*\)\s*)?([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 1],
+    "java": [/^\s*(?:public|private|protected)?\s*(?:static\s+)?[\w<>\[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 1],
+    "js": [/^\s*(?:async\s+)?function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 1],
+    "ts": [/^\s*(?:async\s+)?function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/, 1],
 };
-const supportedExtensions = ["py", "rb", "go", "java", "js", "ts"];
+
+const supportedExtensions = Object.keys(functionRegexMap);
+const invalidFilePathSuffix = [".min.js"]
 
 module.exports = {functionRegexMap, supportedExtensions};
