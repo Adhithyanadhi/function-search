@@ -1,65 +1,37 @@
-# function-search README
+# Function Name Search - VSCode Extension
 
-This is the README for your extension "function-search". After writing up a brief description, we recommend including the following sections.
+## Overview
+The **Function Name Search** extension for VSCode allows users to quickly search for function names across a repository. Similar to the "Go to File" feature, this extension provides a searchable list of function names, displaying the filename and line number, and enables quick navigation to the function.
 
 ## Features
+- Search function names across the repository.
+- Displays filename and line number for each match.
+- Navigate to the function by selecting it from the list.
+- Optimized for large codebases.
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+## Installation
+1. Open VSCode.
+2. Go to **Extensions** (`Ctrl+Shift+X` or `Cmd+Shift+X` on macOS).
+3. Search for `Function Name Search`.
+4. Click **Install**.
 
-For example if there is an image subfolder under your extension project workspace:
+## Usage
+1. Open the command palette (`Ctrl+Shift+P` or `Cmd+Shift+P` on macOS).
+2. Type `Search Function Name` and select the command or (`Ctrl+k` or `Cmd+k` on macOS)..
+3. Start typing a function name to search.
+4. Click on a result to navigate to the function.
 
-\!\[feature X\]\(images/feature-x.png\)
+## Configuration
+- **Language Support:** The extension supports multiple languages such as Java, Python, Golang, JavaScript and Ruby.
+- **Indexing:** Functions are indexed on first use and updated dynamically.
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## Contributing
+Contributions are welcome! To contribute:
+1. Fork the repository.
+2. Create a new branch.
+3. Implement changes and commit.
+4. Open a pull request.
 
-## Requirements
+## Support
+For issues and feature requests, open a GitHub issue or contact us via email.
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code.  Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux)
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux)
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**

@@ -1,9 +1,13 @@
 {
-  "name": "function-search",
-  "displayName": "function-search",
+  "name": "function-name-search",
+  "displayName": "Function Name Search",
   "publisher": "AmbitiousCoder",
-  "description": "",
-  "version": "0.0.1",
+  "description": "The 'Function Name Search' extension for VSCode allows users to quickly search for function names across a repository. Similar to the 'Go to File' feature, this extension provides a searchable list of function names, displaying the filename and line number, and enables quick navigation to the function.",
+  "repository": {
+    "url" : "https://github.com/Adhithyanadhi/function-search"
+  },
+    "icon": "icon.png",  
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.98.0"
   },
@@ -15,17 +19,19 @@
   ],
   "main": "./extension.js",
   "contributes": {
-    "commands": [{
-      "command": "extension.searchFunction",
-      "title": "Search Function Name"
-    }],
+    "commands": [
+      {
+        "command": "extension.searchFunction",
+        "title": "Search Function Name"
+      }
+    ],
     "keybindings": [
-  {
-    "command": "extension.searchFunction",
-    "key": "ctrl+k",
-    "when": "editorTextFocus"
-  }
-]
+      {
+        "command": "extension.searchFunction",
+        "key": "ctrl+k",
+        "when": "editorTextFocus"
+      }
+    ]
   },
   "scripts": {
     "lint": "eslint .",
@@ -33,11 +39,14 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.98.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
-    "eslint": "^9.23.0",
+    "@types/vscode": "^1.98.0",
     "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1"
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.23.0"
+  },
+  "dependencies": {
+    "vsce": "^2.15.0"
   }
 }
