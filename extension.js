@@ -75,11 +75,10 @@ function activate(context) {
 	vscode.workspace.onDidOpenTextDocument((document) => {
 		const filePath = document.fileName;
 		const extension = getExtentionFromFilePath(filePath);
-		console.log("extension", extension)
 		if (supportedExtensions.includes(extension)) {
 			currentFileExtention = extension
-			worker.postMessage({ type: 'extractFileNames', workspacePath, filePath: filePath, priority: "high" , extension});
-			worker.postMessage({ type: 'extractFileNames', workspacePath, filePath: get_dir_path(filePath), priority: "high", extension});
+			worker.postMessage({ type: 'extractFileNames', workspacePath, source: "onDidOpenfile", filePath: filePath, priority: "high" , extension});
+			worker.postMessage({ type: 'extractFileNames', workspacePath, source: "onDidOpenDir", filePath: get_dir_path(filePath), priority: "high", extension});
 		}
 	});
 }
@@ -88,7 +87,7 @@ function activate(context) {
 function startWorkerThread(workspacePath) {
 
 	worker.on('message', (data) => {
-		if (data.type === 'update' ) {
+		if (data.type === 'fetchedFunctions' ) {
 			if (data.filePath == undefined || data.functions == undefined){
 				console.log("data is empty", data);
 			} else {
