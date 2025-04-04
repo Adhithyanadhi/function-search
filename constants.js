@@ -9,7 +9,8 @@ const functionRegexMap = {
 
 const supportedExtensions = Object.keys(functionRegexMap);
 const invalidFilePathSuffix = [".min.js"]
-const DEBOUNCE_DELAY = 1000; // milliseconds
+const FILE_EDIT_DEBOUNCE_DELAY = 1000; // milliseconds
+const   PROCESS_FILE_TIME_OUT = 1000; // milliseconds
 
 
-module.exports = {functionRegexMap, supportedExtensions, DEBOUNCE_DELAY};
+module.exports = {functionRegexMap, supportedExtensions, FILE_EDIT_DEBOUNCE_DELAY};

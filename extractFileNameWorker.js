@@ -3,7 +3,7 @@ require('./logger'); // Must be at the top
 const { getExtentionFromFilePath } = require('./helper')
 
 
-const { functionRegexMap, supportedExtensions, DEBOUNCE_DELAY } = require('./constants');
+const { functionRegexMap, supportedExtensions, FILE_EDIT_DEBOUNCE_DELAY, PROCESS_FILE_TIME_OUT } = require('./constants');
 const { Worker, parentPort } = require('worker_threads');
 const fs = require('fs');
 const path = require('path');
@@ -23,10 +23,28 @@ async function processFiles() {
     if (!idle) return;
     idle = false;
     while (highPriorityFileQueue.length + lowPriorityFileQueue.length > 0) {
-        const task = highPriorityFileQueue.length > 0 ? highPriorityFileQueue.shift() : lowPriorityFileQueue.shift();
-        console.log("task is ", JSON.stringify(task, null, 2))
-        await extractFileNames(task);
+        const task = highPriorityFileQueue.length > 0
+            ? highPriorityFileQueue.shift()
+            : lowPriorityFileQueue.shift();
+    
+            console.log("task is ", JSON.stringify(task, null, 2))
+            const filePath = task.filePath;
+    
+        // Debounce logic
+        if (!filePath) continue;
+    
+        if (debounceMap.has(filePath)) {
+            clearTimeout(debounceMap.get(filePath));
+        }
+    
+        const timer = setTimeout(async () => {
+            debounceMap.delete(filePath);
+            await extractFileNames(task);
+        }, PROCESS_FILE_TIME_OUT);
+    
+        debounceMap.set(filePath, timer);
     }
+    
     idle = true;
 }
 
@@ -119,7 +137,7 @@ function watchForChanges(workspacePath) {
                 parentPort.postMessage({ type: 'delete', filePath });
             }
 
-        }, DEBOUNCE_DELAY);
+        }, FILE_EDIT_DEBOUNCE_DELAY);
 
         debounceMap.set(filePath, timer);
     });
