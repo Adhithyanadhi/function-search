@@ -1,7 +1,6 @@
 require('./logger'); // Must be at the top
-
-const { functionRegexMap, supportedExtensions } = require('./constants');
-const { Worker, parentPort } = require('worker_threads');
+const { parentPort } = require('worker_threads');
+const { FILE_PROPERTIES } = require('./constants');
 const fs = require('fs');
 const path = require('path');
 let highPriorityFileQueue = new Map();
@@ -12,23 +11,23 @@ function extractFunctions(filePath, relativeFilePath) {
     const functionList = [];
     const fileContent = fs.readFileSync(filePath, 'utf8');
 
-    const extension = path.extname(filePath).slice(1);
-    if (extension.length == 0 || !(extension in functionRegexMap)) {
+    const extension = path.extname(filePath);
+    if (extension.length == 0 || !(extension in FILE_PROPERTIES)) {
         return functionList;
     }
 
-    const [regex, groupCount] = functionRegexMap[extension];
+    const regex = FILE_PROPERTIES[extension].regex;
 
     if (!regex) return functionList;
 
     fileContent.split('\n').forEach((line, index) => {
         const match = line.match(regex);
         if (match) {
-            if (match[groupCount] == undefined) {
+            if (match[1] == undefined) {
                 console.log("invalid function name", match)
             } else {
                 functionList.push({
-                    name: match[groupCount],
+                    name: match[1],
                     file: filePath,
                     line: index + 1,
                     relativeFilePath: relativeFilePath,
@@ -55,20 +54,6 @@ function fetchTask(){
     return task;
 }
 
-// const os = require('os');
-
-// function getDynamicSleepDuration() {
-//     const load = os.loadavg()[0]; // 1-minute average
-//     const cores = os.cpus().length;
-//     const loadRatio = load / cores;
-//     console.log(load, cores, loadRatio)
-//     // Tune these ranges as needed
-//     if (loadRatio < 0.5) return 0;     // Low pressure, no need to sleep
-//     if (loadRatio < 0.75) return 5;    // Light load, gentle throttle
-//     if (loadRatio < 1.0) return 10;    // Near full, moderate throttle
-//     if (loadRatio < 1.5) return 20;    // Overloaded, slow down more
-//     return 50;                         // Heavily overloaded
-// }
 
 async function processFiles() {
     if (!idle) return;
@@ -82,12 +67,6 @@ async function processFiles() {
         if (functions.length > 0) {
             parentPort.postMessage({ type: 'fetchedFunctions', filePath, functions });
         }
-
-        // const sleepMs = getDynamicSleepDuration();
-        // if (sleepMs > 0) {
-        //     console.log("awaiting", sleepMs)
-        //     await new Promise(resolve => setTimeout(resolve, sleepMs));
-        // }
     }
 
     idle = true;

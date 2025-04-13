@@ -1,23 +1,18 @@
 require('./logger'); // Must be at the top
 
 const { getExtentionFromFilePath } = require('./helper')
-
-
-const { functionRegexMap, supportedExtensions, FILE_EDIT_DEBOUNCE_DELAY, PROCESS_FILE_TIME_OUT } = require('./constants');
+const { supportedExtensions, invalidFilePath, PROCESS_FILE_TIME_OUT } = require('./constants');
 const { Worker, parentPort } = require('worker_threads');
 const fs = require('fs');
 const path = require('path');
-const EventEmitter = require('events');
-const debounceMap = new Map();
-
+const inodeModifiedAt = new Map();
+const functionWorker = new Worker(path.join(__dirname, "./extractFunctionNameWorker.js"))
 
 let highPriorityFileQueue = [];
 let lowPriorityFileQueue = [];
 let idle = true;
+let debounceMap = new Map();
 
-functionWorker = new Worker(path.join(__dirname, "./extractFunctionNameWorker.js"))
-
-const internalEmitter = new EventEmitter();
 
 async function processFiles() {
     if (!idle) return;
@@ -26,25 +21,22 @@ async function processFiles() {
         const task = highPriorityFileQueue.length > 0
             ? highPriorityFileQueue.shift()
             : lowPriorityFileQueue.shift();
-    
-            console.log("task is ", JSON.stringify(task, null, 2))
-            const filePath = task.filePath;
-    
-        // Debounce logic
+
+        const filePath = task.filePath;
         if (!filePath) continue;
-    
+
         if (debounceMap.has(filePath)) {
             clearTimeout(debounceMap.get(filePath));
         }
-    
+
         const timer = setTimeout(async () => {
             debounceMap.delete(filePath);
             await extractFileNames(task);
         }, PROCESS_FILE_TIME_OUT);
-    
+
         debounceMap.set(filePath, timer);
     }
-    
+
     idle = true;
 }
 
@@ -67,80 +59,48 @@ async function extractFileNames(task) {
     }
 }
 
-
 function preprocessFiles(absoluteFilePath, extension) {
-    function isExcluded(dir) {
-        return dir.includes('lib') || dir.includes('.git') || dir.startsWith('.');
-    }
+    const filesToProcess = [];
 
-    let filesToProcess = [];
-
-    if (extension !== "__all__" && !supportedExtensions.includes(extension)) {
+    if (extension !== '__all__' && !supportedExtensions.includes(extension)) {
         return filesToProcess;
     }
 
+    function isExcluded(name) {
+        return !name || invalidFilePath.some(suffix => name.includes(suffix));
+    }
+
     function handleFiles(fullPath) {
-        if (extension === "__all__" || fullPath.endsWith(extension)) {
+        if ((extension === '__all__' && supportedExtensions.some(ext => fullPath.endsWith(ext))) || fullPath.endsWith(extension)) {
             filesToProcess.push(fullPath);
         }
     }
 
-    function readDirRecursive(dir) {
-        fs.readdirSync(dir, { withFileTypes: true }).forEach(entry => {
-            const fullPath = path.join(dir, entry.name);
-            if (entry.isDirectory()) {
-                if (!isExcluded(entry.name)) {
-                    readDirRecursive(fullPath);
-                }
-            } else {
-                handleFiles(fullPath);
+    function readDirRecursive(fullPath) {
+        try {
+            const stat = fs.statSync(fullPath);
+            const lastSeen = inodeModifiedAt.get(fullPath) || 0;
+
+            if (stat.mtimeMs <= lastSeen || isExcluded(fullPath)) {
+                return
             }
-        });
-    }
 
-    if (fs.existsSync(absoluteFilePath) && fs.statSync(absoluteFilePath).isDirectory()) {
-        readDirRecursive(absoluteFilePath);
-    } else if (fs.existsSync(absoluteFilePath)) {
-        handleFiles(absoluteFilePath);
-    }
+            inodeModifiedAt.set(fullPath, stat.mtimeMs);
 
-    return filesToProcess;
-}
-
-
-
-function watchForChanges(workspacePath) {
-    fs.watch(workspacePath, { recursive: true }, (eventType, filename) => {
-        if (!filename || !supportedExtensions.some(ext => filename.endsWith(ext))) return;
-
-        const filePath = path.join(workspacePath, filename);
-
-        // Clear previous timer if any
-        if (debounceMap.has(filePath)) {
-            clearTimeout(debounceMap.get(filePath));
-        }
-
-        const timer = setTimeout(() => {
-            debounceMap.delete(filePath);
-
-            if (fs.existsSync(filePath)) {
-                console.log("file changed", workspacePath, filePath);
-                internalEmitter.emit("message", {
-                    type: 'extractFileNames',
-                    workspacePath,
-                    filePath,
-                    priority: "high",
-                    extension: getExtentionFromFilePath(filePath),
-                    source: "fileWatcher"
+            if (!stat.isDirectory()) {
+                handleFiles(fullPath)
+            } else {
+                fs.readdirSync(fullPath).forEach(entry => {
+                    readDirRecursive(path.join(fullPath, entry));
                 });
-            } else {
-                parentPort.postMessage({ type: 'delete', filePath });
             }
 
-        }, FILE_EDIT_DEBOUNCE_DELAY);
-
-        debounceMap.set(filePath, timer);
-    });
+        } catch (err) {
+            console.error(`Failed to stat: ${fullPath}`, err);
+        }
+    }
+    readDirRecursive(absoluteFilePath);
+    return filesToProcess;
 }
 
 
@@ -157,12 +117,9 @@ function serve(message) {
             console.error("Worker Error:", error);
             parentPort.postMessage({ type: "error", message: error.message });
         }
-    } else if (message.type === "fetchedFunctions") {
-        parentPort.postMessage(message);
     } else {
         console.log("invalid message type ", message)
     }
-    watchForChanges(message.workspacePath);
 }
 
 
@@ -175,4 +132,6 @@ functionWorker.on('message', (message) => {
 });
 
 parentPort.on('message', (message) => { serve(message) });
-internalEmitter.on('message', (message) => { serve(message) });
+
+// TODO looks like idle value or initialized multiple times, whenever this file is called
+// // check valid file name before pushing to 

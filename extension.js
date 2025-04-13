@@ -1,25 +1,51 @@
 const { getExtentionFromFilePath } = require('./helper')
-
 const vscode = require('vscode');
 const { Worker } = require('worker_threads');
 const path = require('path');
-const { supportedExtensions } = require('./constants');
+const { WORKSPACE_RELATIVE_FILE_MATCH_PATTERN, FILE_EDIT_DEBOUNCE_DELAY, supportedExtensions, FILE_PROPERTIES } = require('./constants');
+const debounceMap = new Map();
 
 let functionIndex = {}; // Store indexed functions grouped by file
 let worker; // Define worker in global scope
 let currentFileExtention = ""
+
 function get_dir_path(file_path){
 	return file_path.substring(0, file_path.lastIndexOf("/"));
 }
 
-const fileIcons = {
-    "py": path.join(__dirname, "icons", "py.svg"),
-    "rb": path.join(__dirname, "icons", "rb.svg"),
-    "go": path.join(__dirname, "icons", "go.svg"),
-    "java": path.join(__dirname, "icons", "java.svg"),
-    "js": path.join(__dirname, "icons", "js.svg"),
-    "ts": path.join(__dirname, "icons", "ts.svg"),
-};
+function watchForChanges(workspacePath) {
+	const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(workspacePath));
+	if (!workspaceFolder) {
+		console.error(`No workspace folder found for path: ${workspacePath}`);
+		return;
+	}
+
+	const pattern = new vscode.RelativePattern(workspaceFolder, WORKSPACE_RELATIVE_FILE_MATCH_PATTERN); // Customize as needed
+	const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+
+	const handleFileChangeEvent = (uri) => {
+		const filePath = uri.fsPath;
+		if (debounceMap.has(filePath)) {
+			clearTimeout(debounceMap.get(filePath));
+		}
+
+		const timer = setTimeout(() => {
+			debounceMap.delete(filePath);
+			console.log("file changed", workspacePath, filePath);
+			worker.postMessage({ type: 'extractFileNames', workspacePath, source: "fileWatcher", filePath, priority: "high" , extension:  getExtentionFromFilePath(filePath)});
+
+		}, FILE_EDIT_DEBOUNCE_DELAY);
+
+		debounceMap.set(filePath, timer);
+	};
+
+	watcher.onDidChange(handleFileChangeEvent);
+	watcher.onDidCreate(handleFileChangeEvent);
+	watcher.onDidDelete((uri) => {
+		const filePath = uri.fsPath;
+		functionIndex[filePath] = []
+	});
+}
 
 function activate(context) {
 	console.log("Function Search Extension Activated");
@@ -43,7 +69,7 @@ function activate(context) {
 
 		for (const [file, functions] of Object.entries(functionIndex)) {
 			const extension = getExtentionFromFilePath(file);  
-			const iconPath = fileIcons[extension] ? vscode.Uri.file(fileIcons[extension]) : undefined;
+			const iconPath = FILE_PROPERTIES[extension].fileIcon ? vscode.Uri.file(FILE_PROPERTIES[extension].fileIcon) : undefined;
 	
 			functions.forEach(f => {
 				const item = {
@@ -80,12 +106,12 @@ function activate(context) {
 			worker.postMessage({ type: 'extractFileNames', workspacePath, source: "onDidOpenfile", filePath: filePath, priority: "high" , extension});
 			worker.postMessage({ type: 'extractFileNames', workspacePath, source: "onDidOpenDir", filePath: get_dir_path(filePath), priority: "high", extension});
 		}
+		watchForChanges(workspacePath);
 	});
 }
 
 // Now `worker` is accessible globally
-function startWorkerThread(workspacePath) {
-
+function startWorkerThread() {
 	worker.on('message', (data) => {
 		if (data.type === 'fetchedFunctions' ) {
 			if (data.filePath == undefined || data.functions == undefined){
