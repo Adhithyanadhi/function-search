@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  function-name-search:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: function-name-search
+    volumes:
+      - .:/app  # Mount the current directory for live edits
+      - /app/node_modules  # Persist node_modules for dev
+
+    working_dir: /app
+    command: sleep infinitely  # This could be your dev command (e.g., for watching code changes)
+    ports:
+      - "3000:3000"  # Expose ports if needed (e.g., for dev server)

@@ -1,7 +1,7 @@
 # Function Name Search - VSCode Extension
 
 ## Overview
-The **Function Name Search** extension for VSCode allows users to quickly search for function names across a repository. Similar to the "Go to File" feature, this extension provides a searchable list of function names, displaying the filename and line number, and enables quick navigation to the function.
+The **Function Name Search** extension for VSCode allows users to quickly search for function names across a repository. Similar to the "Go to File" feature, this extension provides a searchable(supports subsequence search) list of function names, displaying the filename and line number, and enables quick navigation to the function.
 
 ## Features
 - Search function names across the repository.

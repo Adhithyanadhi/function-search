@@ -4,10 +4,10 @@
   "publisher": "AmbitiousCoder",
   "description": "Search & Navigate functions instantly",
   "repository": {
-    "url" : "https://github.com/Adhithyanadhi/function-search"
+    "url": "https://github.com/Adhithyanadhi/function-search"
   },
-    "icon": "icons/icon.png",  
-  "version": "0.0.6",
+  "icon": "icons/icon.png",
+  "version": "0.0.8",
   "engines": {
     "vscode": "^1.22.2"
   },
