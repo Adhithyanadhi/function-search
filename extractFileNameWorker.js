@@ -1,6 +1,6 @@
 require('./logger'); // Must be at the top
 
-const { getExtentionFromFilePath } = require('./helper')
+const { getExtentionFromFilePath } = require('./utils')
 const { supportedExtensions, invalidFilePath, PROCESS_FILE_TIME_OUT } = require('./constants');
 const { Worker, parentPort } = require('worker_threads');
 const fs = require('fs');

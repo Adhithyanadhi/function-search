@@ -15,4 +15,9 @@ function getDirPath(file_path) {
 	return file_path.substring(0, file_path.lastIndexOf("/"));
 }
 
-module.exports = { isSubsequence, getDirPath};
+function getExtentionFromFilePath(file){
+    return '.'+file.split('.').pop()
+}
+
+
+module.exports = { isSubsequence, getDirPath, getExtentionFromFilePath};
