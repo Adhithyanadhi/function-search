@@ -40,14 +40,14 @@ function extractFunctions(filePath, relativeFilePath) {
     return functionList;
 }
 
-function fetchTask(){
+function fetchTask() {
     let task;
-    if(highPriorityFileQueue.size > 0){
-        const firstKey = highPriorityFileQueue.keys().next().value; 
+    if (highPriorityFileQueue.size > 0) {
+        const firstKey = highPriorityFileQueue.keys().next().value;
         task = highPriorityFileQueue.get(firstKey);
         highPriorityFileQueue.delete(firstKey)
     } else {
-        const firstKey = lowPriorityFileQueue.keys().next().value; 
+        const firstKey = lowPriorityFileQueue.keys().next().value;
         task = lowPriorityFileQueue.get(firstKey);
         lowPriorityFileQueue.delete(firstKey)
     }
@@ -64,9 +64,7 @@ async function processFiles() {
         if (!fs.existsSync(filePath)) continue;
         const relativeFilePath = path.relative(workspacePath, filePath);
         const functions = await extractFunctions(filePath, relativeFilePath);
-        if (functions.length > 0) {
-            parentPort.postMessage({ type: 'fetchedFunctions', filePath, functions });
-        }
+        parentPort.postMessage({ type: 'fetchedFunctions', filePath, functions });
     }
 
     idle = true;
@@ -77,9 +75,9 @@ parentPort.on('message', (message) => {
         try {
             if (message.priority == "high" && !highPriorityFileQueue.has(message.filePath)) {
                 highPriorityFileQueue.set(message.filePath, message);
-            } else if(message.priority == "low" && !lowPriorityFileQueue.has(message.filePath)) {
+            } else if (message.priority == "low" && !lowPriorityFileQueue.has(message.filePath)) {
                 lowPriorityFileQueue.set(message.filePath, message);
-            } 
+            }
             processFiles()
         } catch (error) {
             console.error("Worker Error:", error);

@@ -1,3 +1,5 @@
+const { invalidFilePath  } = require('./constants');
+
 function isSubsequence(sub, target) {
 	let i = 0, j = 0;
 	while (i < sub.length && j < target.length) {
@@ -20,4 +22,7 @@ function getExtentionFromFilePath(file){
 }
 
 
-module.exports = { isSubsequence, getDirPath, getExtentionFromFilePath};
+function isExcluded(filePath) {
+	return !filePath || invalidFilePath.some(suffix => filePath.includes(suffix));
+}
+module.exports = { isSubsequence, getDirPath, getExtentionFromFilePath, isExcluded};

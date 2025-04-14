@@ -1,13 +1,11 @@
+require('./logger'); // Must be at the top
+
 const { getExtentionFromFilePath } = require('./utils')
 const { WORKSPACE_RELATIVE_FILE_MATCH_PATTERN, FILE_EDIT_DEBOUNCE_DELAY } = require('./constants');
 const debounceMap = new Map();
-const { Worker } = require('worker_threads');
-const path = require('path');
 const vscode = require('vscode');
 
-let    worker = new Worker(path.join(__dirname, './extractFileNameWorker.js'));
-
-function watchForChanges(workspacePath, functionIndex) {
+function watchForChanges(workspacePath, functionIndex, worker) {
 	const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(workspacePath));
 	if (!workspaceFolder) {
 		console.error(`No workspace folder found for path: ${workspacePath}`);
@@ -25,9 +23,7 @@ function watchForChanges(workspacePath, functionIndex) {
 
 		const timer = setTimeout(() => {
 			debounceMap.delete(filePath);
-			console.log("file changed", workspacePath, filePath);
 			worker.postMessage({ type: 'extractFileNames', workspacePath, source: "fileWatcher", filePath, priority: "high", extension: getExtentionFromFilePath(filePath) });
-
 		}, FILE_EDIT_DEBOUNCE_DELAY);
 
 		debounceMap.set(filePath, timer);

@@ -1,7 +1,7 @@
 require('./logger'); // Must be at the top
 
-const { getExtentionFromFilePath } = require('./utils')
-const { supportedExtensions, invalidFilePath, PROCESS_FILE_TIME_OUT } = require('./constants');
+const { getExtentionFromFilePath, isExcluded } = require('./utils')
+const { supportedExtensions, PROCESS_FILE_TIME_OUT } = require('./constants');
 const { Worker, parentPort } = require('worker_threads');
 const fs = require('fs');
 const path = require('path');
@@ -66,9 +66,6 @@ function preprocessFiles(absoluteFilePath, extension) {
         return filesToProcess;
     }
 
-    function isExcluded(name) {
-        return !name || invalidFilePath.some(suffix => name.includes(suffix));
-    }
 
     function handleFiles(fullPath) {
         if ((extension === '__all__' && supportedExtensions.some(ext => fullPath.endsWith(ext))) || fullPath.endsWith(extension)) {
@@ -134,4 +131,4 @@ functionWorker.on('message', (message) => {
 parentPort.on('message', (message) => { serve(message) });
 
 // TODO looks like idle value or initialized multiple times, whenever this file is called
-// // check valid file name before pushing to 
+// // check valid file name before pushing to for function name extract same as file worker

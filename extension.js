@@ -1,26 +1,27 @@
+require('./logger'); // Must be at the top
+
 const vscode = require('vscode');
-const { Worker } = require('worker_threads');
 const path = require('path');
 const { supportedExtensions, FILE_PROPERTIES } = require('./constants');
-const { getDirPath } = require("./utils"); // Make sure this exists
+const { getDirPath } = require("./utils"); 
 const { showFunctionSearchQuickPick } = require("./quickpick")
-const { watchForChanges } = require("./watcher")
+const { watchForChanges } = require("./fileWatcher")
 const { getExtentionFromFilePath } = require('./utils')
-
+const {WorkerManager} = require('./fileWorkerManager');
 
 let functionIndex = new Map()
-let worker;
+let fileWorker;
 let currentFileExtention = ""
 
 function activate(context) {
 	console.log("Function Search Extension Activated");
 
 	const workspacePath = vscode.workspace.rootPath;
-	worker = new Worker(path.join(__dirname, './extractFileNameWorker.js'));
+	fileWorker = new WorkerManager(path.join(__dirname, './extractFileNameWorker.js'), functionIndex);
 
 	if (workspacePath) {
-		worker.postMessage({ type: 'extractFileNames', workspacePath, filePath: workspacePath, priority: "low", extension: "__all__" });
-		startWorkerThread(workspacePath);
+		fileWorker.postMessage({ type: 'extractFileNames', workspacePath, filePath: workspacePath, priority: "low", extension: "__all__", initialLoad: true });
+		watchForChanges(workspacePath, functionIndex, fileWorker);
 	}
 
 	let disposable = vscode.commands.registerCommand('extension.searchFunction', async () => {
@@ -62,36 +63,20 @@ function activate(context) {
 
 	context.subscriptions.push(disposable);
 
-	// Watch for opened files and process them first
-	vscode.workspace.onDidOpenTextDocument((document) => {
+	vscode.window.onDidChangeActiveTextEditor((editor) => {
+		if (!editor) return;
+		const document = editor.document;
 		const filePath = document.fileName;
 		const extension = getExtentionFromFilePath(filePath);
+
 		if (supportedExtensions.includes(extension)) {
 			currentFileExtention = extension
-			worker.postMessage({ type: 'extractFileNames', workspacePath, source: "onDidOpenfile", filePath: filePath, priority: "high", extension });
-			worker.postMessage({ type: 'extractFileNames', workspacePath, source: "onDidOpenDir", filePath: getDirPath(filePath), priority: "high", extension });
 		}
-		watchForChanges(workspacePath);
+					
+		fileWorker.postMessage({ type: 'extractFileNames', workspacePath, source: "onDidOpenfile", filePath: filePath, priority: "high", extension });
+		fileWorker.postMessage({ type: 'extractFileNames', workspacePath, source: "onDidOpenDir", filePath: getDirPath(filePath), priority: "high", extension });
 	});
 }
 
-// Now `worker` is accessible globally
-function startWorkerThread() {
-	worker.on('message', (data) => {
-		if (data.type === 'fetchedFunctions') {
-			if (data.filePath == undefined || data.functions == undefined) {
-				console.log("data is empty", data);
-			} else {
-				functionIndex[data.filePath] = data.functions;
-			}
-		}
-	});
-
-	worker.on('error', (err) => console.error("Worker Error:", err));
-
-	worker.on('exit', (code) => {
-		if (code !== 0) console.error(`Worker stopped with exit code ${code}`);
-	});
-}
 
 module.exports = { activate };

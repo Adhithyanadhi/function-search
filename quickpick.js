@@ -1,3 +1,4 @@
+require('./logger'); // Must be at the top
 const vscode = require('vscode');
 const {isSubsequence} = require("./utils")
 const {SEARCH_TIMER_TIMEOUT} = require("./constants")
@@ -13,6 +14,7 @@ function openFileAtLine(filePath, lineNumber) {
 }
 
 function showFunctionSearchQuickPick(allFunctions) {
+	// NOTE: since all functions are received as param, any changes in the file-system will not be reflected in the current quick-pick (includes delayed file-system updates)
 	const quickPick = vscode.window.createQuickPick();
 	quickPick.placeholder = "Search a function by name";
 	quickPick.items = allFunctions;
@@ -35,6 +37,7 @@ function showFunctionSearchQuickPick(allFunctions) {
 				}
 			}, SEARCH_TIMER_TIMEOUT);
 		}
+
 		previousSearchText = lcSearchText;
 	});
 
