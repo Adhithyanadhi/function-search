@@ -3,7 +3,7 @@ const { getExtentionFromFilePath } = require('./helper')
 const vscode = require('vscode');
 const { Worker } = require('worker_threads');
 const path = require('path');
-const { supportedExtensions } = require('./constants');
+const { supportedExtensions, FILE_PROPERTIES } = require('./src/constants');
 
 let functionIndex = {}; // Store indexed functions grouped by file
 let worker; // Define worker in global scope
@@ -12,14 +12,60 @@ function get_dir_path(file_path){
 	return file_path.substring(0, file_path.lastIndexOf("/"));
 }
 
-const fileIcons = {
-    "py": path.join(__dirname, "icons", "py.svg"),
-    "rb": path.join(__dirname, "icons", "rb.svg"),
-    "go": path.join(__dirname, "icons", "go.svg"),
-    "java": path.join(__dirname, "icons", "java.svg"),
-    "js": path.join(__dirname, "icons", "js.svg"),
-    "ts": path.join(__dirname, "icons", "ts.svg"),
-};
+function writeCacheToDisk() {
+    try {
+        fs.writeFileSync(CACHE_PATH, JSON.stringify(functionCache, null, 2), 'utf-8');
+        console.log('[Cache] Function cache saved.');
+    } catch (err) {
+        console.error('[Cache] Failed to write function cache:', err);
+
+    }
+}
+
+
+// const indexFile = path.join(__dirname, 'index.jsonl');
+// const fileIndex = new Map();
+
+// function compactIndexIfNeeded() {
+//     const stats = fs.statSync(indexFile);
+//     if (stats.size > 5 * 1024 * 1024) {
+//         const lines = Array.from(fileIndex.values()).map(v => JSON.stringify(v));
+//         fs.writeFileSync(indexFile, lines.join('\n') + '\n');
+//     }
+// }
+
+// function updateFileEntry(file, modifiedAt, functions) {
+//     const record = { file, modifiedAt, functions };
+//     fileIndex.set(file, record);
+//     fs.appendFileSync(indexFile, JSON.stringify(record) + '\n');
+// }
+
+
+// function loadIndex() {
+//   if (!fs.existsSync(indexFile)) return;
+//   const lines = fs.readFileSync(indexFile, 'utf-8').split('\n');
+//   for (const line of lines) {
+//     if (!line.trim()) continue;
+//     const data = JSON.parse(line);
+//     fileIndex.set(data.file, data);
+//   }
+// }
+
+
+// const os = require('os');
+
+// function getDynamicSleepDuration() {
+//     const load = os.loadavg()[0]; // 1-minute average
+//     const cores = os.cpus().length;
+//     const loadRatio = load / cores;
+//     console.log(load, cores, loadRatio)
+//     // Tune these ranges as needed
+//     if (loadRatio < 0.5) return 0;     // Low pressure, no need to sleep
+//     if (loadRatio < 0.75) return 5;    // Light load, gentle throttle
+//     if (loadRatio < 1.0) return 10;    // Near full, moderate throttle
+//     if (loadRatio < 1.5) return 20;    // Overloaded, slow down more
+//     return 50;                         // Heavily overloaded
+// }
 
 function activate(context) {
 	console.log("Function Search Extension Activated");
@@ -43,23 +89,8 @@ function activate(context) {
 
 		for (const [file, functions] of Object.entries(functionIndex)) {
 			const extension = getExtentionFromFilePath(file);  
-			const iconPath = fileIcons[extension] ? vscode.Uri.file(fileIcons[extension]) : undefined;
+			const iconPath = FILE_PROPERTIES[extension].fileIcon ? vscode.Uri.file(FILE_PROPERTIES[extension].fileIcon) : undefined;
 	
-			functions.forEach(f => {
-				const item = {
-					label: f.name,
-					description: `${f.relativeFilePath}:${f.line}`,
-					file: file,
-					line: f.line,
-					function_name: f.name,
-					iconPath: iconPath // Attach custom icon
-				};
-				if (extension == currentFileExtention) {
-					matchingExtentionFunctions.push(item);
-				} else {
-					otherExtentionFunctions.push(item);
-				}
-			});
 		}
 		const allFunctions = matchingExtentionFunctions.concat(otherExtentionFunctions)
 		const selectedFunction = await vscode.window.showQuickPick(allFunctions, { placeHolder: "Search a function by name" });
@@ -72,94 +103,7 @@ function activate(context) {
 	context.subscriptions.push(disposable);
 
 	// Watch for opened files and process them first
-	vscode.workspace.onDidOpenTextDocument((document) => {
-		const filePath = document.fileName;
-		const extension = getExtentionFromFilePath(filePath);
-		console.log("extension", extension)
-		if (supportedExtensions.includes(extension)) {
-			currentFileExtention = extension
-			worker.postMessage({ type: 'extractFileNames', workspacePath, filePath: filePath, priority: "high" , extension});
-			worker.postMessage({ type: 'extractFileNames', workspacePath, filePath: get_dir_path(filePath), priority: "high", extension});
-		}
-	});
 }
-
-// Now `worker` is accessible globally
-function startWorkerThread(workspacePath) {
-
-	worker.on('message', (data) => {
-		if (data.type === 'update' ) {
-			if (data.filePath == undefined || data.functions == undefined){
-				console.log("data is empty", data);
-			} else {
-				functionIndex[data.filePath] = data.functions;
-			}
-		}
-	});
-
-	worker.on('error', (err) => console.error("Worker Error:", err));
-
-	worker.on('exit', (code) => {
-		if (code !== 0) console.error(`Worker stopped with exit code ${code}`);
-	});
-}
-
-
-function openFileAtLine(filePath, lineNumber) {
-	vscode.workspace.openTextDocument(filePath).then(doc => {
-		vscode.window.showTextDocument(doc).then(editor => {
-			const position = new vscode.Position(lineNumber - 1, 0);
-			editor.selection = new vscode.Selection(position, position);
-			editor.revealRange(new vscode.Range(position, position));
-		});
-	});
-}
-
-module.exports = { activate };
-
-
-// import * as vscode from "vscode";
-// import fuzzaldrin from "fuzzaldrin-plus";
-
-// export function activate(context: vscode.ExtensionContext) {
-//     context.subscriptions.push(
-//         vscode.commands.registerCommand("extension.quickPickSubsequence", async () => {
-//             const items = [
-//                 { label: "apple" },
-//                 { label: "application" },
-//                 { label: "banana" },
-//                 { label: "grape" },
-//                 { label: "apricot" },
-//                 { label: "pineapple" },
-//                 { label: "grapefruit" },
-//                 { label: "blackberry" },
-//                 { label: "blueberry" }
-//             ];
-
-//             const quickPick = vscode.window.createQuickPick();
-//             quickPick.items = items;
-
-//             quickPick.onDidChangeValue((searchText) => {
-//                 if (!searchText) {
-//                     quickPick.items = items;
-//                     return;
-//                 }
-
-//                 // Use fuzzaldrin to rank matches efficiently
-//                 const filteredItems = fuzzaldrin.filter(items, searchText, { key: "label" });
-
-//                 quickPick.items = filteredItems;
-//             });
-
-//             quickPick.onDidAccept(() => {
-//                 vscode.window.showInformationMessage(`Selected: ${quickPick.selectedItems[0]?.label}`);
-//                 quickPick.hide();
-//             });
-
-//             quickPick.show();
-//         })
-//     );
-// }
 
 
 
@@ -218,3 +162,83 @@ module.exports = { activate };
 //         parentPort.postMessage('done'); // Notify completion
 //     });
 // }
+
+
+// Simple Trie Node
+class TrieNode {
+	constructor() {
+	  this.children = new Map();
+	  this.wordIndices = new Set(); // store indices of words that pass through this node
+	}
+  }
+  
+  // Main Trie Structure
+  class SearchTrie {
+	constructor() {
+	  this.root = new TrieNode();
+	  this.words = []; // original words
+	  this.lcWords = []; // lowercased version for case-insensitive match
+	}
+  
+	// Add word to trie and keep track of it
+	indexWord(word) {
+	  const wordIndex = this.words.length;
+	  const lcWord = word.toLowerCase();
+  
+	  this.words.push(word);
+	  this.lcWords.push(lcWord);
+  
+	  // Insert each character as a subsequence possibility
+	  for (let i = 0; i < lcWord.length; i++) {
+		let node = this.root;
+		for (let j = i; j < lcWord.length; j++) {
+		  const char = lcWord[j];
+		  if (!node.children.has(char)) {
+			node.children.set(char, new TrieNode());
+		  }
+		  node = node.children.get(char);
+		  node.wordIndices.add(wordIndex);
+		}
+	  }
+	}
+  
+	// Helper function: check if target is a subsequence of word
+	isSubsequence(target, word) {
+	  let i = 0;
+	  for (let j = 0; j < word.length && i < target.length; j++) {
+		if (word[j] === target[i]) i++;
+	  }
+	  return i === target.length;
+	}
+  
+	// Search for all matching words (subsequence match)
+	searchTrie(target) {
+	  const lcTarget = target.toLowerCase();
+	  let node = this.root;
+	  for (const char of lcTarget) {
+		if (!node.children.has(char)) return [];
+		node = node.children.get(char);
+	  }
+  
+	  const results = [];
+	  for (const wordIndex of node.wordIndices) {
+		if (this.isSubsequence(lcTarget, this.lcWords[wordIndex])) {
+		  results.push(this.words[wordIndex]);
+		}
+	  }
+	  return results;
+	}
+  }
+  
+  // Export for use
+  module.exports = SearchTrie;
+  
+  /* Example Usage:
+  const SearchTrie = require('./trie');
+  const trie = new SearchTrie();
+  
+  ['main', 'map', 'maximize', 'function', 'myFunction'].forEach(word => trie.indexWord(word));
+  
+  console.log(trie.searchTrie('mn'));  // ['main', 'myFunction']
+  */
+  

@@ -1,10 +1,35 @@
-.vscode/**
-.vscode-test/**
+# ✅ Include only the final build output and essentials
+!package.json
+!icons
+!LICENSE
+!README.md
+
+# ❌ Ignore development folders and configs
 test/**
-.gitignore
-.yarnrc
+.vscode/**
+scripts/**
+docs/**
+.vscode-test/**
+node_modules/**
+.history/**
+
+# ❌ Ignore various config files and maps/logs
+*.ts
+*.map
+*.log
+*.md
+*.mjs
+*.yarnrc
+*.gitignore
+.eslintrc.*
+.eslintignore
+tsconfig.json
+jsconfig.json
+.vscode-test.*
+makefile
+Dockerfile
+docker-compose.yaml
+logs/**
+
+# ❌ Ignore project quickstart or template files
 vsc-extension-quickstart.md
-**/jsconfig.json
-**/*.map
-**/eslint.config.mjs
-**/.vscode-test.*

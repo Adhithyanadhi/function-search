@@ -32,7 +32,6 @@ function extractFunctions(filePath, relativeFilePath) {
                     line: index + 1,
                     relativeFilePath: relativeFilePath,
                 });
-
             }
         }
     });

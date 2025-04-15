@@ -6,9 +6,6 @@ function isSubsequence(sub, target) {
 		if (sub[i] === target[j]) i++;
 		j++;
 	}
-    if(sub == "starttimei" && i === sub.length){
-        console.log(sub, target)
-    }
 	return i === sub.length;
 }
 

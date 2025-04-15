@@ -33,7 +33,6 @@ class WorkerManager {
 		}
 
 		this.worker.postMessage(data);
-        console.log(new Date().toISOString(), "posted", data)
 	}
 }
 

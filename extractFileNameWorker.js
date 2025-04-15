@@ -1,18 +1,19 @@
+
 require('./logger'); // Must be at the top
 
 const { getExtentionFromFilePath, isExcluded } = require('./utils')
-const { supportedExtensions, PROCESS_FILE_TIME_OUT } = require('./constants');
+const { FUNCTION_EXTRACT_FILE_PATH, supportedExtensions, PROCESS_FILE_TIME_OUT } = require('./constants');
 const { Worker, parentPort } = require('worker_threads');
+
 const fs = require('fs');
 const path = require('path');
 const inodeModifiedAt = new Map();
-const functionWorker = new Worker(path.join(__dirname, "./extractFunctionNameWorker.js"))
+const functionWorker = new Worker(FUNCTION_EXTRACT_FILE_PATH)
 
 let highPriorityFileQueue = [];
 let lowPriorityFileQueue = [];
 let idle = true;
 let debounceMap = new Map();
-
 
 async function processFiles() {
     if (!idle) return;

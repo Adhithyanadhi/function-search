@@ -1,8 +1,7 @@
 require('./logger'); // Must be at the top
 
 const vscode = require('vscode');
-const path = require('path');
-const { supportedExtensions, FILE_PROPERTIES } = require('./constants');
+const { supportedExtensions, FILE_PROPERTIES, FILE_EXTRACT_FILE_PATH } = require('./constants');
 const { getDirPath } = require("./utils"); 
 const { showFunctionSearchQuickPick } = require("./quickpick")
 const { watchForChanges } = require("./fileWatcher")
@@ -14,10 +13,10 @@ let fileWorker;
 let currentFileExtention = ""
 
 function activate(context) {
-	console.log("Function Search Extension Activated");
+	console.log("Func tion Search Extension Activated");
 
 	const workspacePath = vscode.workspace.rootPath;
-	fileWorker = new WorkerManager(path.join(__dirname, './extractFileNameWorker.js'), functionIndex);
+	fileWorker = new WorkerManager(FILE_EXTRACT_FILE_PATH, functionIndex);
 
 	if (workspacePath) {
 		fileWorker.postMessage({ type: 'extractFileNames', workspacePath, filePath: workspacePath, priority: "low", extension: "__all__", initialLoad: true });
