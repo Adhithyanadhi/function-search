@@ -7,15 +7,14 @@
     "url": "https://github.com/Adhithyanadhi/function-search"
   },
   "icon": "icons/icon.png",
-  "version": "0.0.8",
+  "version": "0.1.0",
   "engines": {
     "vscode": "^1.22.2"
   },
   "categories": [
     "Programming Languages",
     "Other",
-    "Language Packs",
-    "Code Navigation"
+    "Language Packs"
   ],
   "keywords": [
     "function search",
