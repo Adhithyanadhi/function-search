@@ -12,7 +12,23 @@
     "vscode": "^1.22.2"
   },
   "categories": [
-    "Other"
+    "Programming Languages",
+    "Other",
+    "Language Packs",
+    "Code Navigation"
+  ],
+  "keywords": [
+    "function search",
+    "function name search",
+    "navigate",
+    "code navigation",
+    "go to definition",
+    "go to function",
+    "go to function definition",
+    "symbol search",
+    "fast search",
+    "refactor",
+    "index functions"
   ],
   "activationEvents": [
     "onStartupFinished"
