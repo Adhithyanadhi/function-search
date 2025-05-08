@@ -14,7 +14,7 @@ const FILE_PROPERTIES = {
         fileIcon: path.join(__dirname, "icons", "go.svg"),
     },
     ".java": {
-        regex: /^\s*(?:public|private|protected)?\s*(?:static\s+)?[\w<>\[\],\s]+?\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+        regex: /^\s*(?:public|private|protected)?\s*(?:static\s+)?(?:final\s+)?[\w<>\[\],\s]+?\s+(?!if|for|while|switch|catch)([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
         fileIcon: path.join(__dirname, "icons", "java.svg"),
     },
     ".js": {
@@ -25,10 +25,31 @@ const FILE_PROPERTIES = {
         regex: /^\s*(?:async\s+)?function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*/,
         fileIcon: path.join(__dirname, "icons", "ts.svg"),
     },
+    ".kt": {
+        regex: /^\s*fun\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*/,
+    },
+    ".c": {
+        regex: /^\s*(?:[a-zA-Z_][\w\s\*]*\s+)+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+    },
+    ".cpp": {
+        regex: /^\s*(?:[a-zA-Z_][\w\s:<>\*&]*\s+)+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+    },
+    ".cs": {
+        regex: /^\s*(?:public|private|protected|internal)?\s*(?:static\s+)?[\w<>\[\],\s]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+    },
+    ".php": {
+        regex: /^\s*function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+    },
+    ".rs": {
+        regex: /\s*fn\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+    },
+    ".swift": {
+        regex: /^\s*func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+    }
 };
 
 const supportedExtensions = Object.keys(FILE_PROPERTIES);
-const invalidFilePath = [".min.js", ".git", '.log', '.tmp', '.bak', '.history/', '/tmp/', '/cache/', '.xml', '.class']
+const invalidFilePath = [".min.js", ".git", '.log', '.tmp', '.bak', '.history/', '/tmp/', '/bin/', '/cache/', '.xml', '.class']
 const FILE_EDIT_DEBOUNCE_DELAY = 2000; // milliseconds
 const PROCESS_FILE_TIME_OUT = 2000; // milliseconds
 const SEARCH_TIMER_TIMEOUT = 150;
