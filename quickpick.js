@@ -17,30 +17,33 @@ function showFunctionSearchQuickPick(allFunctions) {
 	// NOTE: since all functions are received as param, any changes in the file-system will not be reflected in the current quick-pick (includes delayed file-system updates)
 	const quickPick = vscode.window.createQuickPick();
 	quickPick.placeholder = "Search a function by name";
-	quickPick.items = allFunctions;
 
 	let previousSearchText = "";
 	let timeout;
+	let filteredFunctions = allFunctions;
+	function populateQuickPickItems(){
+		quickPick.items = filteredFunctions.slice(0, 100);
+	}
+	
+	populateQuickPickItems(quickPick, filteredFunctions);
 
 	quickPick.onDidChangeValue((searchText) => {
 		if (timeout) clearTimeout(timeout);
 		const lcSearchText = searchText.toLowerCase();
-
+	
 		if (lcSearchText.length < previousSearchText.length) {
-			quickPick.items = allFunctions;
+			filteredFunctions = allFunctions;
 		} else {
 			timeout = setTimeout(() => {
 				if (lcSearchText) {
-					quickPick.items = quickPick.items.filter(item =>
-						isSubsequence(lcSearchText, item.lowercased_label)
-					);
+					filteredFunctions = filteredFunctions.filter(item => isSubsequence(lcSearchText, item.lowercased_label));
 				}
 			}, SEARCH_TIMER_TIMEOUT);
 		}
-
+		populateQuickPickItems(quickPick, filteredFunctions);	
 		previousSearchText = lcSearchText;
 	});
-
+	
 	quickPick.onDidAccept(() => {
 		const selected = quickPick.selectedItems[0];
 		if (selected?.file && selected?.line) {
