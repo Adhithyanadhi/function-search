@@ -5,7 +5,7 @@ const { WORKSPACE_RELATIVE_FILE_MATCH_PATTERN, FILE_EDIT_DEBOUNCE_DELAY } = requ
 const debounceMap = new Map();
 const vscode = require('vscode');
 
-function watchForChanges(workspacePath, functionIndex, worker) {
+function watchForChanges(workspacePath, functionIndex, worker, updateCacheHandler) {
 	const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(workspacePath));
 	if (!workspaceFolder) {
 		console.error(`No workspace folder found for path: ${workspacePath}`);
@@ -31,10 +31,13 @@ function watchForChanges(workspacePath, functionIndex, worker) {
 
 	watcher.onDidChange(handleFileChangeEvent);
 	watcher.onDidCreate(handleFileChangeEvent);
-	watcher.onDidDelete((uri) => {
-		const filePath = uri.fsPath;
-		functionIndex[filePath] = []
-	});
+  watcher.onDidDelete((uri) => {
+    const filePath = uri.fsPath;
+    if (functionIndex.get(filePath)) {
+      functionIndex.set(filePath, []);
+      updateCacheHandler(filePath);
+    }
+  });
 }
 
 

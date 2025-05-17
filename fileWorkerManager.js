@@ -6,7 +6,7 @@ const { supportedExtensions } = require('./constants');
 const { isExcluded } = require("./utils")
 
 class WorkerManager {
-	constructor(workerScriptPath, functionIndex) {
+	constructor(workerScriptPath, functionIndex, updateCacheHandler) {
 		this.worker = new Worker(workerScriptPath);
         this.functionIndex = functionIndex;
 
@@ -15,7 +15,8 @@ class WorkerManager {
                 if (data.filePath == undefined || data.functions == undefined) {
                     console.log("data is empty", data);
                 } else {
-                    this.functionIndex[data.filePath] = data.functions;
+                    this.functionIndex.set(data.filePath, data.functions);
+                    updateCacheHandler(data.filePath);
                 }
             }
         });
