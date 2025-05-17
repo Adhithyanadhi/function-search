@@ -22,8 +22,20 @@ function watchForChanges(workspacePath, functionIndex, worker, updateCacheHandle
 		}
 
 		const timer = setTimeout(() => {
-			debounceMap.delete(filePath);
-			worker.postMessage({ type: 'extractFileNames', workspacePath, source: "fileWatcher", filePath, priority: "high", extension: getExtentionFromFilePath(filePath) });
+			try {
+				debounceMap.delete(filePath);
+
+				worker.postMessage({
+					type: 'extractFileNames',
+					workspacePath,
+					source: 'fileWatcher',
+					filePath,
+					priority: 'high',
+					extension: getExtentionFromFilePath(filePath),
+				});
+			} catch (err) {
+				console.error("Error inside setTimeout:", err);
+			}
 		}, FILE_EDIT_DEBOUNCE_DELAY);
 
 		debounceMap.set(filePath, timer);
@@ -31,13 +43,13 @@ function watchForChanges(workspacePath, functionIndex, worker, updateCacheHandle
 
 	watcher.onDidChange(handleFileChangeEvent);
 	watcher.onDidCreate(handleFileChangeEvent);
-  watcher.onDidDelete((uri) => {
-    const filePath = uri.fsPath;
-    if (functionIndex.get(filePath)) {
-      functionIndex.set(filePath, []);
-      updateCacheHandler(filePath);
-    }
-  });
+	watcher.onDidDelete((uri) => {
+		const filePath = uri.fsPath;
+		if (functionIndex.get(filePath)) {
+			functionIndex.set(filePath, []);
+			updateCacheHandler(filePath);
+		}
+	});
 }
 
 
