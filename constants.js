@@ -14,7 +14,7 @@ const FILE_PROPERTIES = {
         fileIcon: path.join(__dirname, "icons", "go.svg"),
     },
     ".java": {
-        regex: /^\s*(?:public|private|protected)?\s*(?:static\s+)?(?:final\s+)?[\w<>\[\],\s]+?\s+(?!if|for|while|switch|catch)([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+        regex: /^\s*(?:public|private|protected)?\s*(?:static\s+)?(?:final\s+)?(?:[\w<>\[\],]+\s+)+(?!if|for|while|switch|catch)([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
         fileIcon: path.join(__dirname, "icons", "java.svg"),
     },
     ".js": {
