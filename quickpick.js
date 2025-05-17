@@ -1,7 +1,7 @@
 require('./logger'); // Must be at the top
 const vscode = require('vscode');
-const {isSubsequence} = require("./utils")
-const {SEARCH_TIMER_TIMEOUT} = require("./constants")
+const { isSubsequence } = require("./utils")
+const { SEARCH_TIMER_TIMEOUT } = require("./constants")
 
 function openFileAtLine(filePath, lineNumber) {
 	vscode.workspace.openTextDocument(filePath).then(doc => {
@@ -14,36 +14,41 @@ function openFileAtLine(filePath, lineNumber) {
 }
 
 function showFunctionSearchQuickPick(allFunctions) {
-	// NOTE: since all functions are received as param, any changes in the file-system will not be reflected in the current quick-pick (includes delayed file-system updates)
 	const quickPick = vscode.window.createQuickPick();
 	quickPick.placeholder = "Search a function by name";
+	quickPick.matchOnDescription = false;
+	quickPick.matchOnDetail = false;
 
 	let previousSearchText = "";
 	let timeout;
 	let filteredFunctions = allFunctions;
-	function populateQuickPickItems(){
+
+	function populateQuickShow(){
 		quickPick.items = filteredFunctions.slice(0, 100);
 	}
-	
-	populateQuickPickItems(quickPick, filteredFunctions);
+
+	populateQuickShow();
 
 	quickPick.onDidChangeValue((searchText) => {
-		if (timeout) clearTimeout(timeout);
 		const lcSearchText = searchText.toLowerCase();
-	
-		if (lcSearchText.length < previousSearchText.length) {
+		if (!lcSearchText) {
 			filteredFunctions = allFunctions;
+			previousSearchText = lcSearchText;
+			populateQuickShow();
 		} else {
+			if (timeout) clearTimeout(timeout);
 			timeout = setTimeout(() => {
-				if (lcSearchText) {
+				if (lcSearchText.length < previousSearchText.length) {
+					filteredFunctions = allFunctions.filter(item => isSubsequence(lcSearchText, item.lowercased_label));
+				} else {
 					filteredFunctions = filteredFunctions.filter(item => isSubsequence(lcSearchText, item.lowercased_label));
 				}
+				populateQuickShow(filteredFunctions);
+				previousSearchText = lcSearchText;
 			}, SEARCH_TIMER_TIMEOUT);
 		}
-		populateQuickPickItems(quickPick, filteredFunctions);	
-		previousSearchText = lcSearchText;
 	});
-	
+
 	quickPick.onDidAccept(() => {
 		const selected = quickPick.selectedItems[0];
 		if (selected?.file && selected?.line) {
@@ -55,4 +60,4 @@ function showFunctionSearchQuickPick(allFunctions) {
 	quickPick.show();
 }
 
-module.exports = {showFunctionSearchQuickPick}
+module.exports = { showFunctionSearchQuickPick }
