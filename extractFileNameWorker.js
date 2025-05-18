@@ -2,7 +2,7 @@
 require('./logger'); // Must be at the top
 
 const { getExtentionFromFilePath, isExcluded } = require('./utils')
-const { FUNCTION_EXTRACT_FILE_PATH, supportedExtensions, PROCESS_FILE_TIME_OUT } = require('./constants');
+const { FUNCTION_EXTRACT_FILE_PATH, supportedExtensions, PROCESS_FILE_TIME_OUT, MAX_INGRES_X_FUNCTION, X_FUNCTION_INGRES_TIMEOUT } = require('./constants');
 const { Worker, parentPort } = require('worker_threads');
 
 const fs = require('fs');
@@ -14,6 +14,7 @@ let highPriorityFileQueue = [];
 let lowPriorityFileQueue = [];
 let idle = true;
 let debounceMap = new Map();
+let ingres = 0;
 
 async function processFiles() {
     if (!idle) return;
@@ -45,12 +46,15 @@ async function extractFileNames(task) {
     const files = preprocessFiles(task.filePath, task.extension);
 
     for (const filePath of files) {
-        const fileExtension = getExtentionFromFilePath(filePath)
+        const fileExtension = getExtentionFromFilePath(filePath);
+        if (!supportedExtensions.includes(fileExtension)) continue;
 
-        if (!supportedExtensions.includes(fileExtension)) {
-            continue;
+        // Simple backpressure control, so that extract function name can run with the available file list
+        while (ingres >= MAX_INGRES_X_FUNCTION) {
+            await new Promise(resolve => setTimeout(resolve, X_FUNCTION_INGRES_TIMEOUT)); // very lightweight
         }
 
+        ingres++;
         functionWorker.postMessage({
             type: "extractFunctionNames",
             filePath,
@@ -123,6 +127,7 @@ function serve(message) {
 
 functionWorker.on('message', (message) => {
     if (message.type === "fetchedFunctions") {
+        ingres--;
         parentPort.postMessage(message);
     } else {
         console.log("invalid message type ", message)
