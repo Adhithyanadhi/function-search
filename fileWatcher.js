@@ -1,6 +1,6 @@
 require('./logger'); // Must be at the top
 
-const { getExtentionFromFilePath } = require('./utils')
+const { getExtentionFromFilePath } = require('./utils/common')
 const { WORKSPACE_RELATIVE_FILE_MATCH_PATTERN, FILE_EDIT_DEBOUNCE_DELAY } = require('./constants');
 const debounceMap = new Map();
 const vscode = require('vscode');

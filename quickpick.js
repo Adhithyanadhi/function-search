@@ -1,6 +1,6 @@
 require('./logger'); // Must be at the top
 const vscode = require('vscode');
-const { isSubsequence } = require("./utils")
+const { isSubsequence } = require("./utils/common")
 const { SEARCH_TIMER_TIMEOUT } = require("./constants")
 
 function openFileAtLine(filePath, lineNumber) {

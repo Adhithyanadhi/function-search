@@ -1,15 +1,16 @@
 
 require('./logger'); // Must be at the top
 
-const { getExtentionFromFilePath, isExcluded } = require('./utils')
-const { FUNCTION_EXTRACT_FILE_PATH, supportedExtensions, PROCESS_FILE_TIME_OUT, MAX_INGRES_X_FUNCTION, X_FUNCTION_INGRES_TIMEOUT } = require('./constants');
+const { getExtentionFromFilePath, isExcluded } = require('./utils/common')
+const { FUNCTION_EXTRACT_FILE_PATH, DISK_WORKER_FILE_PATH, supportedExtensions, PROCESS_FILE_TIME_OUT, MAX_INGRES_X_FUNCTION, X_FUNCTION_INGRES_TIMEOUT } = require('./constants');
 const { Worker, parentPort } = require('worker_threads');
 
 const fs = require('fs');
 const path = require('path');
-const inodeModifiedAt = new Map();
 const functionWorker = new Worker(FUNCTION_EXTRACT_FILE_PATH)
+const diskWorker = new Worker(DISK_WORKER_FILE_PATH)
 
+let inodeModifiedAt = new Map();
 let highPriorityFileQueue = [];
 let lowPriorityFileQueue = [];
 let idle = true;
@@ -83,20 +84,23 @@ function preprocessFiles(absoluteFilePath, extension) {
             const stat = fs.statSync(fullPath);
             const lastSeen = inodeModifiedAt.get(fullPath) || 0;
 
-            if (stat.mtimeMs <= lastSeen || isExcluded(fullPath)) {
-                return
+            if (isExcluded(fullPath)) {
+                return;
             }
 
-            inodeModifiedAt.set(fullPath, stat.mtimeMs);
-
-            if (!stat.isDirectory()) {
-                handleFiles(fullPath)
-            } else {
+            if (stat.isDirectory()) {
+                inodeModifiedAt.set(fullPath, stat.mtimeMs);
                 fs.readdirSync(fullPath).forEach(entry => {
                     readDirRecursive(path.join(fullPath, entry));
                 });
-            }
+            } else {
+                if (stat.mtimeMs <= lastSeen) {
+                    return;
+                }
 
+                inodeModifiedAt.set(fullPath, stat.mtimeMs);
+                handleFiles(fullPath);
+            }
         } catch (err) {
             console.error(`Failed to stat: ${fullPath}`, err);
         }
@@ -119,6 +123,14 @@ function serve(message) {
             console.error("Worker Error:", error);
             parentPort.postMessage({ type: "error", message: error.message });
         }
+    } else if (message.type === "inodemodifiedat") {
+        inodeModifiedAt = message.data;
+    } else if (message.type === "write-inodeModifiedAt-to-file") {
+        diskWorker.postMessage({
+            type: message.type,
+            filePath: message.filePath,
+            data: inodeModifiedAt,
+        })
     } else {
         console.log("invalid message type ", message)
     }
@@ -132,6 +144,10 @@ functionWorker.on('message', (message) => {
     } else {
         console.log("invalid message type ", message)
     }
+});
+
+diskWorker.on('message', (message) => {
+    parentPort.postMessage({ type: "write-inodeModifiedAt-to-file-completed" });
 });
 
 parentPort.on('message', (message) => { serve(message) });
