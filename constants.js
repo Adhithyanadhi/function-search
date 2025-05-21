@@ -53,6 +53,7 @@ const FILE_PROPERTIES = {
     },
     ".rs": {
         regex: /\s*fn\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+        fileIcon: path.join(__dirname, "icons", "rs.svg"),
     },
     ".swift": {
         regex: /^\s*func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
