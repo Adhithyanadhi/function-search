@@ -7,9 +7,9 @@ const SEARCH_TIMER_TIMEOUT = 150;
 const FILE_EXTRACT_FILE_PATH = path.join(__dirname, "./extractFileNameWorker.js");
 const DISK_WORKER_FILE_PATH = path.join(__dirname, "./diskWorker.js");
 const FUNCTION_EXTRACT_FILE_PATH = path.join(__dirname, "./extractFunctionNameWorker.js");
-const MAX_INGRES_X_FUNCTION = 10000;
+const MAX_INGRES_X_FUNCTION = 1000;
 const X_FUNCTION_INGRES_TIMEOUT = 10;
-const SNAPSHOT_TO_DISK_INTERVAL = 10 * 60 * 1000;
+const SNAPSHOT_TO_DISK_INTERVAL = 1 * 60 * 1000;
 
 const FILE_PROPERTIES = {
     ".py": {
