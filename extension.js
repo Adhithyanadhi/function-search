@@ -30,8 +30,10 @@ function loadFromDiskOnStartup(context, workspacePath) {
 
     if (fs.existsSync(functionIndexFilePath)) {
         try {
-            const raw = fs.readFileSync(functionIndexFilePath, 'utf-8');
-            functionIndex = new Map(Object.entries(JSON.parse(raw)));
+            const raw = fs.readFileSync(functionIndexFilePath, 'utf-8').trim();
+            if (raw) {
+                functionIndex = new Map(Object.entries(JSON.parse(raw)));
+            }
         } catch (err) {
             console.error("Failed to load cached maps:", err);
         }
@@ -39,13 +41,16 @@ function loadFromDiskOnStartup(context, workspacePath) {
 
     if (fs.existsSync(inodeModifiedAtFilePath)) {
         try {
-            const raw = fs.readFileSync(inodeModifiedAtFilePath, 'utf-8');
-            inodeModifiedAt = new Map(Object.entries(JSON.parse(raw)));
+            const raw = fs.readFileSync(inodeModifiedAtFilePath, 'utf-8').trim();
+            if (raw) {
+                inodeModifiedAt = new Map(Object.entries(JSON.parse(raw)));
+            }
         } catch (err) {
             console.error("Failed to load cached maps:", err);
         }
     }
-    return {inodeModifiedAt, functionIndex}
+
+    return { inodeModifiedAt, functionIndex }
 }
 
 function rebuildFunctionList() {
@@ -121,13 +126,14 @@ function activate(context) {
     console.log("Function Search Extension Activated");
 
     const workspacePath = vscode.workspace.rootPath;
-    InitializeEnvs(context, workspacePath);
-    const dataFromDisk = loadFromDiskOnStartup();
-    functionIndex = dataFromDisk.functionIndex;
-
-    fileWorker = new WorkerManager(FILE_EXTRACT_FILE_PATH, functionIndex, getFunctionIndexFilePath(), updateCacheHandler);
 
     if (workspacePath) {
+        InitializeEnvs(context, workspacePath);
+        const dataFromDisk = loadFromDiskOnStartup();
+        functionIndex = dataFromDisk.functionIndex;
+
+        fileWorker = new WorkerManager(FILE_EXTRACT_FILE_PATH, functionIndex, getFunctionIndexFilePath(), updateCacheHandler);
+
         fileWorker.postMessage({ type: 'inodemodifiedat', data: dataFromDisk.inodeModifiedAt });
         fileWorker.postMessage({ type: 'extractFileNames', workspacePath, filePath: workspacePath, priority: "low", extension: "__all__", initialLoad: true });
         watchForChanges(workspacePath, functionIndex, fileWorker, updateCacheHandler);
