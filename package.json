@@ -43,8 +43,7 @@
     "keybindings": [
       {
         "command": "extension.searchFunction",
-        "key": "ctrl+k",
-        "when": "editorTextFocus"
+        "key": "ctrl+k"
       }
     ]
   },
