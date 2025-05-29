@@ -2,6 +2,7 @@ const path = require('path');
 
 const invalidFilePath = [".min.js", ".git", '.log', '.tmp', '.bak', '.history/', '/tmp/', '/bin/', '/cache/', '.xml', '.class']
 const FILE_EDIT_DEBOUNCE_DELAY = 2000; // milliseconds
+const ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY = 200; // milliseconds
 const PROCESS_FILE_TIME_OUT = 2000; // milliseconds
 const SEARCH_TIMER_TIMEOUT = 150;
 const FILE_EXTRACT_FILE_PATH = path.join(__dirname, "./extractFileNameWorker.js");
@@ -62,4 +63,4 @@ const FILE_PROPERTIES = {
 const supportedExtensions = Object.keys(FILE_PROPERTIES);
 const WORKSPACE_RELATIVE_FILE_MATCH_PATTERN = '**/*{' + supportedExtensions.join(',') + '}'
 
-module.exports = { SNAPSHOT_TO_DISK_INTERVAL ,  DISK_WORKER_FILE_PATH, FILE_EXTRACT_FILE_PATH, FUNCTION_EXTRACT_FILE_PATH, WORKSPACE_RELATIVE_FILE_MATCH_PATTERN, SEARCH_TIMER_TIMEOUT, FILE_PROPERTIES, PROCESS_FILE_TIME_OUT, supportedExtensions, FILE_EDIT_DEBOUNCE_DELAY, invalidFilePath, MAX_INGRES_X_FUNCTION, X_FUNCTION_INGRES_TIMEOUT };
+module.exports = { SNAPSHOT_TO_DISK_INTERVAL ,  DISK_WORKER_FILE_PATH, FILE_EXTRACT_FILE_PATH, FUNCTION_EXTRACT_FILE_PATH, WORKSPACE_RELATIVE_FILE_MATCH_PATTERN, SEARCH_TIMER_TIMEOUT, FILE_PROPERTIES, PROCESS_FILE_TIME_OUT, supportedExtensions, FILE_EDIT_DEBOUNCE_DELAY, invalidFilePath, MAX_INGRES_X_FUNCTION, X_FUNCTION_INGRES_TIMEOUT, ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY };

@@ -13,11 +13,11 @@ function getDirPath(file_path) {
     return file_path.substring(0, file_path.lastIndexOf("/"));
 }
 
-function getExtentionFromFilePath(file) {
+function getExtensionFromFilePath(file) {
     return '.' + file.split('.').pop()
 }
 
 function isExcluded(filePath) {
     return !filePath || invalidFilePath.some(suffix => filePath.includes(suffix));
 }
-module.exports = { isSubsequence, getDirPath, getExtentionFromFilePath, isExcluded };
+module.exports = { isSubsequence, getDirPath, getExtensionFromFilePath, isExcluded };

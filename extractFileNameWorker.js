@@ -1,7 +1,7 @@
 
 require('./logger'); // Must be at the top
 
-const { getExtentionFromFilePath, isExcluded } = require('./utils/common')
+const { getExtensionFromFilePath, isExcluded } = require('./utils/common')
 const { FUNCTION_EXTRACT_FILE_PATH, DISK_WORKER_FILE_PATH, supportedExtensions, PROCESS_FILE_TIME_OUT, MAX_INGRES_X_FUNCTION, X_FUNCTION_INGRES_TIMEOUT } = require('./constants');
 const { Worker, parentPort } = require('worker_threads');
 
@@ -47,7 +47,7 @@ async function extractFileNames(task) {
     const files = preprocessFiles(task.filePath, task.extension);
 
     for (const filePath of files) {
-        const fileExtension = getExtentionFromFilePath(filePath);
+        const fileExtension = getExtensionFromFilePath(filePath);
         if (!supportedExtensions.includes(fileExtension)) continue;
 
         // Simple backpressure control, so that extract function name can run with the available file list
