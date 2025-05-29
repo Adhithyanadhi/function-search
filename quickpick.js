@@ -1,30 +1,30 @@
 require('./logger'); // Must be at the top
 const vscode = require('vscode');
-const { isSubsequence } = require("./utils/common")
+const { isSubsequence, prioritizeCurrentFileExt } = require("./utils/common")
 const { SEARCH_TIMER_TIMEOUT } = require("./constants")
 
 function openFileAtLine(filePath, lineNumber) {
-	vscode.workspace.openTextDocument(filePath).then(doc => {
-		vscode.window.showTextDocument(doc).then(editor => {
-			const position = new vscode.Position(lineNumber - 1, 0);
-			editor.selection = new vscode.Selection(position, position);
-			editor.revealRange(new vscode.Range(position, position));
-		});
+	const uri = vscode.Uri.file(filePath);
+	vscode.window.showTextDocument(uri, { preview: false }).then(editor => {
+		const position = new vscode.Position(lineNumber, 0);
+		editor.selection = new vscode.Selection(position, position);
+		editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.AtTop);
 	});
 }
 
-function showFunctionSearchQuickPick(allFunctions) {
+function showFunctionSearchQuickPick(allFunctions, currentFileExtension) {
 	const quickPick = vscode.window.createQuickPick();
 	quickPick.placeholder = "Search a function by name";
 	quickPick.matchOnDescription = false;
 	quickPick.matchOnDetail = false;
+	quickPick.sortByLabel = false;
 
 	let previousSearchText = "";
 	let timeout;
 	let filteredFunctions = allFunctions;
 
-	function populateQuickShow(){
-		quickPick.items = filteredFunctions.slice(0, 100);
+	function populateQuickShow() {
+		quickPick.items = prioritizeCurrentFileExt(filteredFunctions.slice(0, 100), currentFileExtension);
 	}
 
 	populateQuickShow();

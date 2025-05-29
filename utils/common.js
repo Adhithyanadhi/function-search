@@ -17,7 +17,24 @@ function getExtensionFromFilePath(file) {
     return '.' + file.split('.').pop()
 }
 
+function prioritizeCurrentFileExt(functionList, currentFileExtension) {
+    if(currentFileExtension == '') return functionList;
+    const sameExt = [];
+    const others = [];
+
+    for (const fn of functionList) {
+        if (fn.extension === currentFileExtension) {
+            sameExt.push(fn);
+        } else {
+            others.push(fn);
+        }
+    }
+
+    return [...sameExt, ...others];
+}
+
+
 function isExcluded(filePath) {
     return !filePath || invalidFilePath.some(suffix => filePath.includes(suffix));
 }
-module.exports = { isSubsequence, getDirPath, getExtensionFromFilePath, isExcluded };
+module.exports = { isSubsequence, getDirPath, getExtensionFromFilePath, isExcluded, prioritizeCurrentFileExt };

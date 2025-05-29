@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
 const { ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY, SNAPSHOT_TO_DISK_INTERVAL, supportedExtensions, FILE_PROPERTIES, FILE_EXTRACT_FILE_PATH } = require('./constants');
-const { getDirPath, getExtensionFromFilePath } = require("./utils/common");
+const { getDirPath, getExtensionFromFilePath, prioritizeCurrentFileExt } = require("./utils/common");
 const { InitializeEnvs, getInodeModifiedAtFilePath, getFunctionIndexFilePath } = require("./utils/vscode");
 const { showFunctionSearchQuickPick } = require("./quickpick");
 const { watchForChanges } = require("./fileWatcher");
@@ -52,21 +52,6 @@ function loadFromDiskOnStartup(context, workspacePath) {
     }
 
     return { inodeModifiedAt, functionIndex }
-}
-
-function prioritizeCurrentFileExt() {
-    const sameExt = [];
-    const others = [];
-
-    for (const fn of cachedFunctionList) {
-        if (fn.extension === currentFileExtension) {
-            sameExt.push(fn);
-        } else {
-            others.push(fn);
-        }
-    }
-
-    cachedFunctionList = [...sameExt, ...others];
 }
 
 function prepareFunctionProperties(f, file, iconPath, extension) {
@@ -164,7 +149,7 @@ function activate(context) {
             rebuildFunctionList();
         }
 
-        showFunctionSearchQuickPick(cachedFunctionList);
+        showFunctionSearchQuickPick(cachedFunctionList, currentFileExtension);
     });
 
     context.subscriptions.push(disposable);
@@ -182,7 +167,7 @@ function activate(context) {
 
             debounceChangeActiveDoc = setTimeout(() => {
                 currentFileExtension = extension;
-                prioritizeCurrentFileExt();
+                cachedFunctionList = prioritizeCurrentFileExt(cachedFunctionList, currentFileExtension);
             }, ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY); 
         }
 
