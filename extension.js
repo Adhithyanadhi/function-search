@@ -68,6 +68,12 @@ function prepareFunctionProperties(f, file, iconPath, extension) {
     }
 }
 
+function setCurrentFileExtension(ext){
+    if(currentFileExtension === ext) return;
+    currentFileExtension = ext;
+    cachedFunctionList = prioritizeCurrentFileExt(cachedFunctionList, currentFileExtension);
+}
+
 function getIconPath(extension) {
     const fileProps = FILE_PROPERTIES[extension];
     return fileProps?.fileIcon ? vscode.Uri.file(fileProps.fileIcon) : undefined;
@@ -90,6 +96,7 @@ function rebuildFunctionList() {
         fileToRangeMap.set(file, { start: currentIndex, end: currentIndex + items.length });
         currentIndex += items.length;
     }
+    cachedFunctionList = prioritizeCurrentFileExt(cachedFunctionList, currentFileExtension);
 }
 
 function updateCache(filePath, newFunctions) {
@@ -130,6 +137,10 @@ function activate(context) {
         InitializeEnvs(context, workspacePath);
         const dataFromDisk = loadFromDiskOnStartup();
         functionIndex = dataFromDisk.functionIndex;
+        if (vscode.window.activeTextEditor) {
+            const fileName = vscode.window.activeTextEditor.document.fileName;
+            setCurrentFileExtension(getExtensionFromFilePath(fileName));
+        }
 
         fileWorker = new WorkerManager(FILE_EXTRACT_FILE_PATH, functionIndex, getFunctionIndexFilePath(), updateCacheHandler);
 
@@ -166,8 +177,7 @@ function activate(context) {
             clearTimeout(debounceChangeActiveDoc);
 
             debounceChangeActiveDoc = setTimeout(() => {
-                currentFileExtension = extension;
-                cachedFunctionList = prioritizeCurrentFileExt(cachedFunctionList, currentFileExtension);
+                setCurrentFileExtension(extension);
             }, ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY); 
         }
 
