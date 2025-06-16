@@ -71,7 +71,7 @@ function prepareFunctionProperties(f, file, iconPath, extension) {
 function setCurrentFileExtension(ext){
     if(currentFileExtension === ext) return;
     currentFileExtension = ext;
-    cachedFunctionList = prioritizeCurrentFileExt(cachedFunctionList, currentFileExtension);
+    prioritizeCurrentFileExtHandler(cachedFunctionList, currentFileExtension);
 }
 
 function getIconPath(extension) {
@@ -79,24 +79,37 @@ function getIconPath(extension) {
     return fileProps?.fileIcon ? vscode.Uri.file(fileProps.fileIcon) : undefined;
 }
 
-function rebuildFunctionList() {
+
+function rebuildFileToRangeMap(){
+    fileToRangeMap = new Map();
+    let start = 0;
+    for (let i = 0; i < cachedFunctionList.length; i++) {
+        const file = cachedFunctionList[i].file;
+        fileToRangeMap.set(file, { start, end: i + 1 });
+    }
+}
+
+function prioritizeCurrentFileExtHandler() {
+    cachedFunctionList = prioritizeCurrentFileExt(cachedFunctionList, currentFileExtension);
+    rebuildFileToRangeMap();
+}
+
+
+
+function rebuildCachedFunctionList() {
     cachedFunctionList = [];
     fileToRangeMap.clear();
 
-    const files = Array.from(functionIndex.keys());
-    let currentIndex = 0;
-
-    for (const file of files) {
-        const functions = functionIndex.get(file) || [];
-        const ext = getExtensionFromFilePath(file)
-        const iconPath = getIconPath(ext)
-        const items = functions.map(f => prepareFunctionProperties(f, file, iconPath, ext));
-
+    for (const [file, functions] of functionIndex.entries()) {
+        const ext      = getExtensionFromFilePath(file);
+        const iconPath = getIconPath(ext);
+        const items    = functions.map(f =>
+            prepareFunctionProperties(f, file, iconPath, ext)
+        );
         cachedFunctionList.push(...items);
-        fileToRangeMap.set(file, { start: currentIndex, end: currentIndex + items.length });
-        currentIndex += items.length;
     }
-    cachedFunctionList = prioritizeCurrentFileExt(cachedFunctionList, currentFileExtension);
+
+    prioritizeCurrentFileExtHandler(cachedFunctionList, currentFileExtension);
 }
 
 function updateCache(filePath, newFunctions) {
@@ -126,6 +139,7 @@ function updateCacheHandler(filePath) {
     markFunctionIndexDirty();
     const updatedFunctions = functionIndex.get(filePath) || [];
     updateCache(filePath, updatedFunctions);
+    prioritizeCurrentFileExtHandler();
 }
 
 function activate(context) {
@@ -137,6 +151,7 @@ function activate(context) {
         InitializeEnvs(context, workspacePath);
         const dataFromDisk = loadFromDiskOnStartup();
         functionIndex = dataFromDisk.functionIndex;
+        rebuildCachedFunctionList();
         if (vscode.window.activeTextEditor) {
             const fileName = vscode.window.activeTextEditor.document.fileName;
             setCurrentFileExtension(getExtensionFromFilePath(fileName));
@@ -157,7 +172,7 @@ function activate(context) {
 
         if (cachedFunctionList.length === 0) {
             console.log("Rebuilding function list...");
-            rebuildFunctionList();
+            rebuildCachedFunctionList();
         }
 
         showFunctionSearchQuickPick(cachedFunctionList, currentFileExtension);
