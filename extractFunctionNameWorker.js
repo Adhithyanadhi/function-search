@@ -1,9 +1,6 @@
 require('./logger'); // Must be at the top
 const { parentPort } = require('worker_threads');
 const { FILE_PROPERTIES } = require('./constants');
-const { extractJavaFunctions } = require("./extract/java");
-const { extractFunctionsFromFile } = require("./extract/common");
-
 const fs = require('fs');
 const path = require('path');
 let highPriorityFileQueue = new Map();
@@ -12,6 +9,7 @@ let idle = true;
 
 function extractFunctions(filePath, relativeFilePath) {
     const functionList = [];
+    const fileContent = fs.readFileSync(filePath, 'utf8');
 
     const extension = path.extname(filePath);
     if (extension.length == 0 || !(extension in FILE_PROPERTIES)) {
@@ -19,14 +17,26 @@ function extractFunctions(filePath, relativeFilePath) {
     }
 
     const regex = FILE_PROPERTIES[extension].regex;
+
     if (!regex) return functionList;
 
-    switch (extension) {
-        case ".java":
-            return extractJavaFunctions(filePath, relativeFilePath, regex);
-        default:
-            return extractFunctionsFromFile(filePath, relativeFilePath, regex);
-    }
+    fileContent.split('\n').forEach((line, index) => {
+        const match = line.match(regex);
+        if (match) {
+            if (match[1] == undefined) {
+                console.log("invalid function name", match)
+            } else {
+                functionList.push({
+                    name: match[1],
+                    file: filePath,
+                    line: index + 1,
+                    relativeFilePath: relativeFilePath,
+                });
+            }
+        }
+    });
+
+    return functionList;
 }
 
 function fetchTask() {
