@@ -1,35 +1,34 @@
-# ✅ Include only the final build output and essentials
-!package.json
-!icons
-!LICENSE
-!README.md
+# Environment files
+.env
+src/config/.env
 
-# ❌ Ignore development folders and configs
-test/**
-.vscode/**
-scripts/**
-docs/**
-.vscode-test/**
-node_modules/**
-.history/**
-
-# ❌ Ignore various config files and maps/logs
-*.ts
-*.map
+# Development files
 *.log
-*.md
-*.mjs
-*.yarnrc
-*.gitignore
-.eslintrc.*
-.eslintignore
-tsconfig.json
-jsconfig.json
-.vscode-test.*
-makefile
+logs/
+tmp-lmdb/
+node_modules/
+
+# Build artifacts
+out/
+*.vsix
+
+# Development directories
+.history/
+.vscode/
+test/
+scripts/
+.history/
+
+# Development files
 Dockerfile
 docker-compose.yaml
-logs/**
-
-# ❌ Ignore project quickstart or template files
+makefile
+idea.js
 vsc-extension-quickstart.md
+changelog.md
+demo.gif
+eslint.config.mjs
+jsconfig.json
+
+# keep binaries
+!prebuilds/**

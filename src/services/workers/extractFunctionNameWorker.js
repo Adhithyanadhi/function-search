@@ -1,10 +1,12 @@
-require('./logger'); // Must be at the top
+const logger = require('../../utils/logger');
 const { parentPort } = require('worker_threads');
-const { FILE_PROPERTIES } = require('./constants');
+const { createParentBus } = require('../../services/messaging/workerBus');
+const { EXTRACT_FUNCTION_NAMES, FETCHED_FUNCTIONS } = require('../../config/constants');
+const { FILE_PROPERTIES } = require('../../config/constants');
 const fs = require('fs');
 const path = require('path');
-let highPriorityFileQueue = new Map();
-let lowPriorityFileQueue = new Map();
+const highPriorityFileQueue = new Map();
+const lowPriorityFileQueue = new Map();
 let idle = true;
 
 function extractFunctions(filePath, relativeFilePath) {
@@ -12,25 +14,23 @@ function extractFunctions(filePath, relativeFilePath) {
     const fileContent = fs.readFileSync(filePath, 'utf8');
 
     const extension = path.extname(filePath);
-    if (extension.length == 0 || !(extension in FILE_PROPERTIES)) {
+    if (extension.length === 0 || !(extension in FILE_PROPERTIES)) {
         return functionList;
     }
 
     const regex = FILE_PROPERTIES[extension].regex;
 
-    if (!regex) return functionList;
+    if (!regex) {return functionList;}
 
     fileContent.split('\n').forEach((line, index) => {
         const match = line.match(regex);
         if (match) {
-            if (match[1] == undefined) {
-                console.log("invalid function name", match)
-            } else {
+            if (match[1] !== undefined) {
                 functionList.push({
                     name: match[1],
                     file: filePath,
-                    line: index + 1,
-                    relativeFilePath: relativeFilePath,
+                    line: index+1,
+                    relativeFilePath,
                 });
             }
         }
@@ -53,41 +53,39 @@ function fetchTask() {
     return task;
 }
 
+const parentBus = createParentBus(parentPort);
 
 async function processFiles() {
-    if (!idle) return;
+    if (!idle) {return;}
     idle = false;
 
     while (highPriorityFileQueue.size + lowPriorityFileQueue.size > 0) {
         const { workspacePath, filePath } = fetchTask();
-        if (!fs.existsSync(filePath)) continue;
+        if (!fs.existsSync(filePath)) {continue;}
         const relativeFilePath = path.relative(workspacePath, filePath);
         const functions = await extractFunctions(filePath, relativeFilePath);
-        parentPort.postMessage({ type: 'fetchedFunctions', filePath, functions });
+        parentBus.postMessage(FETCHED_FUNCTIONS, { filePath, functions }, 'low');
     }
 
     idle = true;
 }
 
 parentPort.on('message', (message) => {
-    if (message.type == "extractFunctionNames") {
+    if (message.type === EXTRACT_FUNCTION_NAMES) {
         try {
-            if (message.priority == "high" && !highPriorityFileQueue.has(message.filePath)) {
-                highPriorityFileQueue.set(message.filePath, message);
-            } else if (message.priority == "low" && !lowPriorityFileQueue.has(message.filePath)) {
-                lowPriorityFileQueue.set(message.filePath, message);
+            const p = message.payload || message;
+            const pr = p.priority || 'low';
+            if (pr === "high" && !highPriorityFileQueue.has(p.filePath)) {
+                highPriorityFileQueue.set(p.filePath, p);
+            } else if (!lowPriorityFileQueue.has(p.filePath)) {
+                lowPriorityFileQueue.set(p.filePath, p);
             }
             processFiles()
         } catch (error) {
-            console.error("Worker Error:", error);
-            parentPort.postMessage({ type: "error", message: error.message });
+            logger.error("Worker Error:", error);
+            parentBus.postMessage('error', { message: error.message }, 'high');
         }
     }
 });
 
 
-parentPort.on('error', (err) => console.error("parentPort Error:", err));
-
-parentPort.on('exit', (code) => {
-    if (code !== 0) console.error(`parentPort stopped with exit code ${code}`);
-});

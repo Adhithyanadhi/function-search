@@ -8,9 +8,9 @@ services:
     container_name: function-name-search
     volumes:
       - .:/app  # Mount the current directory for live edits
-      - /app/node_modules  # Persist node_modules for dev
+      # Keep container node_modules isolated to avoid native binary mismatches
 
     working_dir: /app
-    command: sleep infinitely  # This could be your dev command (e.g., for watching code changes)
+    command: tail -f /dev/null  # Keep the container running for dev
     ports:
       - "3000:3000"  # Expose ports if needed (e.g., for dev server)
