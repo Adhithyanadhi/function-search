@@ -29,8 +29,9 @@ class CommandManager extends BaseService {
      */
     registerCommand(name, commandClass) {
         const command = new commandClass(this.container);
+        command.initialize();
         this.commands.set(name, command);
-        logger.debug(`[CommandManager] Registered command: ${name}`);
+        console.log(`[CommandManager] Registered command: ${name}`);
         return command;
     }
 

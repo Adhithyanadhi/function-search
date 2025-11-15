@@ -8,6 +8,8 @@ const { WorkerBus } = require('./messaging/bus');
 const { FETCHED_FUNCTIONS } = require('../config/constants');
 const { ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY, SNAPSHOT_TO_DISK_INTERVAL, supportedExtensions, FILE_EXTRACT_FILE_PATH, MILLISECONDS_PER_DAY } = require('../config/constants');
 const { configLoader } = require('../config/configLoader');
+const logger = require('../utils/logger');
+
 
 function prepareFunctionProperties(f, file, iconPath, extension) {
     return {
@@ -37,7 +39,6 @@ class IndexerService extends BaseService {
         this.intervalHandle = null;
         this.iconResolver = undefined;
         this.snapshotIntervalMs = configLoader.get('BUFFER_SNAPSHOT_INTERVAL', SNAPSHOT_TO_DISK_INTERVAL);
-        this.logger = null;
         this.dbRepo = null;
         this.cacheWriter = null;
     }
@@ -47,26 +48,24 @@ class IndexerService extends BaseService {
      */
     async initialize() {
         await super.initialize();
-        this.logger = this.container.get('loggerService');
         this.dbRepo = this.container.get('databaseRepository');
         this.cacheWriter = this.container.get('cacheWriterService');
         this.functionIndex = this.container.get('functionIndexBuffer');
         this.iconResolver = this.container.get('iconResolverService');
         
-        this.logger.debug('[IndexerService] Initialized');
+        logger.debug('[IndexerService] Initialized');
     }
     async initializeCore(context) {
         const workspacePath = getWorkspacePath();
         if (!workspacePath) {return false;}
         this.workspacePath = workspacePath;
-        this.logger.debug('[Indexer] Activation with workspacePath:', this.workspacePath);
+        logger.debug('[Indexer] Activation with workspacePath:', this.workspacePath);
         await initializeEnvironment(context, workspacePath);
-        this.iconResolver = (fileName) => vscode.Uri.joinPath(context.extensionUri, 'icons', fileName);
         const dataFromDisk = await this.loadFromDiskOnStartup();
         this.functionIndex.merge(dataFromDisk.functionIndex);
         this.globalFunctionNames = await this.getAllFunctionNames();
         this.rebuildCachedFunctionList();
-        this.logger.debug('[Indexer] Cached function list size after rebuild:', this.cachedFunctionList.length);
+        logger.debug('[Indexer] Cached function list size after rebuild:', this.cachedFunctionList.length);
         if (vscode.window.activeTextEditor) {
             const fileName = vscode.window.activeTextEditor.document.fileName;
             this.setCurrentFileExtension(getExtensionFromFilePath(fileName));
@@ -81,14 +80,14 @@ class IndexerService extends BaseService {
         this.bus.bind();
         this.bus.on(FETCHED_FUNCTIONS, (m) => {
             const p = m.payload || {};
-            this.logger.debug('[Indexer] Received fetchedFunctions for', p.filePath, 'count=', (p.functions||[]).length);
+            logger.debug('[Indexer] Received fetchedFunctions for', p.filePath, 'count=', (p.functions||[]).length);
             if (p.filePath && Array.isArray(p.functions)) {
                 this.functionIndex.set(p.filePath, p.functions);
                 this.updateCacheHandler(p.filePath);
             }
         });
         this.bus.setInodeModifiedAt(this.initialInodeMap || new Map());
-        this.logger.debug('[Indexer] Trigger initial extractFileNames for workspace');
+        logger.debug('[Indexer] Trigger initial extractFileNames for workspace');
         this.bus.extractFileNames({ workspacePath: this.workspacePath, filePath: this.workspacePath, extension: "__all__", initialLoad: true }, 'low');
     }
 
@@ -107,7 +106,7 @@ class IndexerService extends BaseService {
                 }, ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY);
             }
 
-            this.logger.debug('[Indexer] onDidChangeActiveTextEditor posting extract for file:', filePath);
+            logger.debug('[Indexer] onDidChangeActiveTextEditor posting extract for file:', filePath);
             this.bus.extractFileNames({ workspacePath: this.workspacePath, source: "onDidOpenfile", filePath, extension }, 'high');
             this.bus.extractFileNames({ workspacePath: this.workspacePath, source: "onDidOpenDir", filePath: getDirPath(filePath), extension }, 'high');
         });
@@ -136,12 +135,12 @@ class IndexerService extends BaseService {
             const data = await this.loadStartupCache(base, windowStartMs);
             inodeModifiedAt = data.inodeModifiedAt;
             this.functionIndex.merge(data.functionIndex);
-            this.logger.debug('[Indexer] Loaded from DB:', {
+            logger.debug('[Indexer] Loaded from DB:', {
                 inodeCount: inodeModifiedAt.size,
                 functionIndexFiles: this.functionIndex.size
             });
         } catch (err) {
-            this.logger.error("Failed to load DB caches:", err);
+            logger.error("Failed to load DB caches:", err);
         }
         return { inodeModifiedAt, functionIndex: this.functionIndex };
     }
@@ -164,7 +163,7 @@ class IndexerService extends BaseService {
                 if (arr.length > 0) {functionIndex.set(filePath, arr);}
             }
         } catch (e) {
-            this.logger.error('[Indexer] loadStartupCache failed:', e);
+            logger.error('[Indexer] loadStartupCache failed:', e);
         }
         return { inodeModifiedAt, functionIndex };
     }
@@ -178,7 +177,7 @@ class IndexerService extends BaseService {
             const rows = handle.prepare('SELECT fileName FROM file_cache WHERE lastAccessedAt IS NOT NULL AND lastAccessedAt >= ?').all(windowStartMs);
             return rows.map(r => r.fileName);
         } catch (e) {
-            this.logger.error('[Indexer] getRecentFilePaths failed:', e);
+            logger.error('[Indexer] getRecentFilePaths failed:', e);
             return [];
         }
     }
@@ -194,7 +193,7 @@ class IndexerService extends BaseService {
             const arr = JSON.parse(row.functions);
             return Array.isArray(arr) ? arr : [];
         } catch (e) {
-            this.logger.error('[Indexer] getFunctionsForFile failed:', e);
+            logger.error('[Indexer] getFunctionsForFile failed:', e);
             return [];
         }
     }
@@ -208,7 +207,7 @@ class IndexerService extends BaseService {
             const rows = handle.prepare('SELECT functionName FROM function_names').all();
             return rows.map(r => r.functionName);
         } catch (e) {
-            this.logger.error('[Indexer] getAllFunctionNames failed:', e);
+            logger.error('[Indexer] getAllFunctionNames failed:', e);
             return [];
         }
     }
@@ -319,5 +318,3 @@ class IndexerService extends BaseService {
 }
 
 module.exports = { IndexerService, prepareFunctionProperties };
-
-

@@ -2,98 +2,34 @@
   "name": "function-name-search",
   "displayName": "Function Name Search",
   "publisher": "AmbitiousCoder",
-  "description": "Search & Navigate functions instantly",
   "version": "0.5.0",
+  "description": "Search & Navigate functions instantly",
   "license": "MIT",
-  "icon": "icons/icon.png",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Adhithyanadhi/function-search"
-  },
-  "bugs": {
-    "url": "https://github.com/Adhithyanadhi/function-search/issues"
-  },
-  "engines": {
-    "vscode": "^1.22.2"
-  },
-  "extensionKind": [
-    "workspace"
-  ],
-  "categories": [
-    "Programming Languages",
-    "Other",
-    "Language Packs"
-  ],
-  "keywords": [
-    "function search",
-    "function name search",
-    "navigate",
-    "code navigation",
-    "go to definition",
-    "go to function",
-    "go to function definition",
-    "symbol search",
-    "fast search",
-    "refactor",
-    "index functions"
+  "engines": { "vscode": "^1.80.0" },
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:function-name-search.searchFunction",
+    "onCommand:function-name-search.clearIndex",
+    "onView:function-name-search"
   ],
   "main": "./src/extension.js",
-  "activationEvents": [
-    "onStartupFinished"
-  ],
   "contributes": {
     "commands": [
-      {
-        "command": "extension.searchFunction",
-        "title": "Search Function Name"
-      },
-      {
-        "command": "extension.clearFunctionIndex",
-        "title": "Clear Function Index (Current Project)"
-      }
-    ],
-    "keybindings": [
-      {
-        "command": "extension.searchFunction",
-        "key": "ctrl+k",
-        "when": "!functionSearch.isCursor"
-      },
-      {
-        "command": "extension.searchFunction",
-        "key": "ctrl+shift+k",
-        "when": "functionSearch.isCursor"
-      },
-      {
-        "command": "extension.searchFunction",
-        "key": "ctrl+shift+k",
-        "when": "!functionSearch.isCursor"
-      }
-    ],
-    "configuration": {
-      "type": "object",
-      "title": "Function Name Search",
-      "properties": {}
-    }
+      { "command": "function-name-search.searchFunction", "title": "Function Name Search: Search Function" },
+      { "command": "function-name-search.clearIndex", "title": "Function Name Search: Clear Index" }
+    ]
   },
   "scripts": {
     "lint": "eslint .",
-    "pretest": "npm run lint",
-    "test": "echo \"No tests configured\"",
-    "package": "vsce package",
-    "publish": "vsce publish",
-    "prebuild:current": "node scripts/prebuild.current.mjs",
-    "prebuild:targets": "node scripts/build-targets.mjs",
-    "verify:prebuild": "node scripts/verify-prebuild.mjs"
+    "test": "echo \"(no tests)\"",
+    "package": "vsce package"
   },
   "dependencies": {
-    "better-sqlite3": "^11.10.0"
+    "node-sqlite3-wasm": "0.8.51"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.1",
-    "@types/node": "20.x",
     "@vscode/vsce": "^3.0.0",
-    "better-sqlite3": "^11.2.1",
-    "eslint": "^9.23.0",
-    "node-abi": "^3.80.0"
+    "@types/node": "20.x",
+    "eslint": "^9.23.0"
   }
 }

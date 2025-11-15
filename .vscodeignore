@@ -1,25 +1,18 @@
-# Environment files
+# Env
 .env
 src/config/.env
 
-# Development files
+# Dev logs/temp
 *.log
 logs/
 tmp-lmdb/
-node_modules/
 
 # Build artifacts
 out/
 *.vsix
 
-# Development directories
+# Dev-only files/dirs
 .history/
-.vscode/
-test/
-scripts/
-.history/
-
-# Development files
 Dockerfile
 docker-compose.yaml
 makefile
@@ -29,6 +22,12 @@ changelog.md
 demo.gif
 eslint.config.mjs
 jsconfig.json
+.vscode/**
+test/**
+scripts/**
 
-# keep binaries
-!prebuilds/**
+# Exclude node_modules by default…
+node_modules/**
+
+# …but include the WASM runtime we need at runtime
+!node_modules/node-sqlite3-wasm/dist/**

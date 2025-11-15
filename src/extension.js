@@ -1,5 +1,3 @@
-require('./native/ensure-better-sqlite3.cjs').ensureBetterSqlite3Binary();
-const Database = require('better-sqlite3');
 const vscode = require('vscode');
 const { bootstrap } = require('./services/core/bootstrap');
 const { initializeEnvironment, getDBDir } = require('./utils/vscode');

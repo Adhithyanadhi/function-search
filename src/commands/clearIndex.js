@@ -8,19 +8,17 @@ class ClearIndexCommand extends BaseCommand {
     constructor(container) {
         super(container);
         this.indexerService = null;
-        this.logger = null;
     }
 
     /**
      * Initialize the command
      */
     async initialize() {
-        this.logger = this.container.get('loggerService');
         this.indexerService = this.container.get('indexerService');
     }
 
     register(context, workspacePath) {
-        const disposable = vscode.commands.registerCommand('extension.clearFunctionIndex', async () => {
+        const disposable = vscode.commands.registerCommand('function-name-search.clearIndex', async () => {
             await this.execute(workspacePath);
         });
         return disposable;
@@ -43,7 +41,7 @@ class ClearIndexCommand extends BaseCommand {
                     await fs.promises.unlink(dbFile);
                 }
             } catch (e) {
-                this.logger.error("[FunctionSearch] Failed deleting db file:", e);
+                logger.error("[FunctionSearch] Failed deleting db file:", e);
             }
 
             this.indexerService.functionIndex.clear();
@@ -57,7 +55,7 @@ class ClearIndexCommand extends BaseCommand {
                 this.indexerService.bus.extractFileNames({ workspacePath, filePath: workspacePath, extension: "__all__", initialLoad: true }, 'high');
             }
         } catch (err) {
-            this.logger.error("[FunctionSearch] Failed to clear function index:", err);
+            logger.error("[FunctionSearch] Failed to clear function index:", err);
             vscode.window.showErrorMessage("Failed to clear function index. See console for details.");
         }
     }

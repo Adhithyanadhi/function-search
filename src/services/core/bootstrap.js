@@ -2,7 +2,6 @@ const { ServiceContainer } = require('./serviceContainer');
 const { DatabaseRepository } = require('../database/databaseRepository');
 const { CacheWriterService } = require('../database/cacheWriterService');
 const { CommandManager } = require('../commands/commandManager');
-const { LoggerService } = require('../utilities/loggerService');
 const { FileSystemService } = require('../utilities/fileSystemService');
 const { IconResolverService } = require('../utilities/iconResolverService');
 const { DualBufferManager } = require('../dualBufferManager');
@@ -22,7 +21,6 @@ class ServiceBootstrap {
      */
     registerServices() {
         // Core services
-        this.container.register('loggerService', () => new LoggerService(this.container), true);
         this.container.register('fileSystemService', () => new FileSystemService(this.container), true);
         this.container.register('iconResolverService', () => new IconResolverService(this.container), true);
 
@@ -55,7 +53,6 @@ class ServiceBootstrap {
 
         // Initialize services in dependency order
         const initOrder = [
-            'loggerService',
             'fileSystemService',
             'iconResolverService',
             'databaseRepository',

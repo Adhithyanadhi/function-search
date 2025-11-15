@@ -167,14 +167,8 @@ class DualBufferManager extends BaseService {
      * Merge external data into both buffers
      */
     merge(data) {
-        if (data instanceof Map) {
-            for (const [key, value] of data.entries()) {
-                this.set(key, value);
-            }
-        } else if (data && data !== null) {
-            for (const [key, value] of Object.entries(data)) {
-                this.set(key, value);
-            }
+        for (const [key, value] of data.entries()) {
+            this.set(key, value);
         }
     }
 

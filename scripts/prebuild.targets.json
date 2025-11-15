@@ -1,7 +1,0 @@
-{
-  "vscode-stable":   { "runtime": "electron", "version": "32.2.5" },
-  "vscode-insiders": { "runtime": "electron", "version": "33.0.0" },
-  "cursor":          { "runtime": "electron", "version": "30.0.8" }
-}
-
-

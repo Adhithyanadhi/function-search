@@ -1,4 +1,3 @@
-require('../utils/logger');
 const vscode = require('vscode');
 const { BaseCommand } = require('../services/commands/baseCommand');
 const { QuickPickService } = require('../services/quickpick');
@@ -6,13 +5,13 @@ const { getDBDir } = require('../utils/vscode');
 const { getExtensionFromFilePath } = require('../utils/common');
 const { MILLISECONDS_PER_DAY } = require('../config/constants');
 const { prepareFunctionProperties } = require('../services/indexer');
+const logger = require('../utils/logger');
 
 class SearchFunctionCommand extends BaseCommand {
     constructor(container) {
         super(container);
         this.indexerService = null;
         this.fallbackCache = new Map();
-        this.logger = null;
         this.iconResolver = null;
     }
 
@@ -20,14 +19,13 @@ class SearchFunctionCommand extends BaseCommand {
      * Initialize the command
      */
     async initialize() {
-        this.logger = this.container.get('loggerService');
         this.iconResolver = this.container.get('iconResolverService');
         // Get indexer service from container
         this.indexerService = this.container.get('indexerService');
     }
 
     register(context) {
-        const disposable = vscode.commands.registerCommand('extension.searchFunction', async () => {
+        const disposable = vscode.commands.registerCommand('function-name-search.searchFunction', async () => {
             if (this.indexerService.functionIndex.size === 0) {
                 try {
                     if (this.indexerService.bus && this.indexerService.workspacePath) {
@@ -132,7 +130,7 @@ class SearchFunctionCommand extends BaseCommand {
             const rows = handle.prepare(candidateFilePathsQuery).all(...names, windowStartMs, limit);
             return rows.map(r => r.filePath);
         } catch (e) {
-            this.logger.error('[SearchFunctionCommand] getCandidateFilePathsForFallback failed:', e);
+            logger.error('[SearchFunctionCommand] getCandidateFilePathsForFallback failed:', e);
             return [];
         }
     }
@@ -150,7 +148,7 @@ class SearchFunctionCommand extends BaseCommand {
                 const rows = stmt.all(...chunk);
                 out.push(...rows);
             } catch (e) {
-                this.logger.error('[SearchFunctionCommand] fetchFunctionBlobsForFiles failed:', e);
+                logger.error('[SearchFunctionCommand] fetchFunctionBlobsForFiles failed:', e);
             }
             if (out.length >= limit) {break;}
         }
