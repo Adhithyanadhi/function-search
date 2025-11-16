@@ -1,16 +1,8 @@
-version: '3.8'
-
 services:
-  function-name-search:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: function-name-search
+  vscode-extension:
+    build: .
+    container_name: vscode-extension
     volumes:
-      - .:/app  # Mount the current directory for live edits
-      # Keep container node_modules isolated to avoid native binary mismatches
-
+      - .:/app  # Mount the extension directory
     working_dir: /app
-    command: tail -f /dev/null  # Keep the container running for dev
-    ports:
-      - "3000:3000"  # Expose ports if needed (e.g., for dev server)
+    command: sleep infinity

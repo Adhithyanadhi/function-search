@@ -3,6 +3,7 @@ const { bootstrap } = require('./services/core/bootstrap');
 const { initializeEnvironment, getDBDir } = require('./utils/vscode');
 const { SearchFunctionCommand } = require('./commands/searchFunction');
 const { ClearIndexCommand } = require('./commands/clearIndex');
+const { WriteToCacheCommand } = require('./commands/writeToCache');
 const pkg = require('../package.json');
 
 /**
@@ -43,6 +44,7 @@ async function activate(context) {
 	const commandManager = bootstrap.getService('commandManager');
 	commandManager.registerCommand('searchFunction', SearchFunctionCommand);
 	commandManager.registerCommand('clearIndex', ClearIndexCommand);
+	commandManager.registerCommand('writeToCache', WriteToCacheCommand);
 	commandManager.registerWithVSCode(context);
 
 	context.subscriptions.push({

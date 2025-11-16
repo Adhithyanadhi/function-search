@@ -4,7 +4,7 @@ const vscode = require('vscode');
 const { BaseCommand } = require('../services/commands/baseCommand');
 const { getDBDir } = require('../utils/vscode');
 
-class ClearIndexCommand extends BaseCommand {
+class WriteToCacheCommand extends BaseCommand {
     constructor(container) {
         super(container);
         this.indexerService = null;
@@ -18,7 +18,7 @@ class ClearIndexCommand extends BaseCommand {
     }
 
     register(context) {
-        const disposable = vscode.commands.registerCommand('extension.clearIndex', async () => {
+        const disposable = vscode.commands.registerCommand('extension.writeToCache', async () => {
             await this.execute(this.indexerService.workspacePath);
         });
         return disposable;
@@ -36,24 +36,10 @@ class ClearIndexCommand extends BaseCommand {
             }
 
             const dbFile = path.join(baseDir, 'db.sqlite');
-            try {
-                if (fs.existsSync(dbFile)) {
-                    await fs.promises.unlink(dbFile);
-                }
-            } catch (e) {
-                logger.error("[FunctionSearch] Failed deleting db file:", e);
-            }
+            console.log("dbfile path", dbFile);
+            this.indexerService.bus.writeCacheToFile(getDBDir());
+            console.log("dbfile path sucess", dbFile);
 
-            this.indexerService.functionIndex.clear();
-            this.indexerService.cachedFunctionList = [];
-            this.indexerService.fileToRangeMap.clear();
-            this.indexerService.prioritizeCurrentFileExtHandler();
-
-            vscode.window.showInformationMessage("Function index cleared. Reindexing...");
-            if (this.indexerService.bus && workspacePath) {
-                this.indexerService.bus.setInodeModifiedAt(new Map(), 'high');
-                this.indexerService.bus.extractFileNames({ workspacePath, filePath: workspacePath, extension: "__all__", initialLoad: true }, 'low');
-            }
         } catch (err) {
             logger.error("[FunctionSearch] Failed to clear function index:", err);
             vscode.window.showErrorMessage("Failed to clear function index. See console for details.");
@@ -61,6 +47,6 @@ class ClearIndexCommand extends BaseCommand {
     }
 }
 
-module.exports = { ClearIndexCommand };
+module.exports = { WriteToCacheCommand };
 
 

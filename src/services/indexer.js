@@ -38,7 +38,6 @@ class IndexerService extends BaseService {
         this.debounceChangeActiveDoc = null;
         this.intervalHandle = null;
         this.iconResolver = undefined;
-        this.snapshotIntervalMs = configLoader.get('BUFFER_SNAPSHOT_INTERVAL', SNAPSHOT_TO_DISK_INTERVAL);
         this.dbRepo = null;
         this.cacheWriter = null;
     }
@@ -81,7 +80,7 @@ class IndexerService extends BaseService {
         this.bus.on(FETCHED_FUNCTIONS, (m) => {
             const p = m.payload || {};
             logger.debug('[Indexer] Received fetchedFunctions for', p.filePath, 'count=', (p.functions||[]).length);
-            if (p.filePath && Array.isArray(p.functions)) {
+            if (p.filePath && p.functions) {
                 this.functionIndex.set(p.filePath, p.functions);
                 this.updateCacheHandler(p.filePath);
             }
@@ -113,7 +112,7 @@ class IndexerService extends BaseService {
     }
 
     startSnapshotTimer() {
-        const interval = this.snapshotIntervalMs || SNAPSHOT_TO_DISK_INTERVAL;
+        const interval =  SNAPSHOT_TO_DISK_INTERVAL;
         this.intervalHandle = setInterval(async () => {
             try {
                 this.bus.writeCacheToFile(getDBDir());

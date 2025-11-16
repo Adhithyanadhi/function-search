@@ -47,6 +47,9 @@ async function initializeServices() {
         lastAccessBuffer = new DualBufferManager(container, 'LastAccess');
         await lastAccessBuffer.initialize();
         
+        inodeModifiedAtBuffer = new DualBufferManager(container, 'InodeModifiedAt');
+        await inodeModifiedAtBuffer.initialize();
+        
         logger.debug('[DiskWorker] Services initialized');
     } catch (e) {
         logger.error('[DiskWorker] Failed to initialize services:', e);

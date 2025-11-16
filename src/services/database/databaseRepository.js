@@ -6,7 +6,8 @@ const { BaseService } = require('../core/baseService');
 const { configLoader } = require('../../config/configLoader');
 
 // WASM SQLite for Node/Electron with a Node-FS VFS (file-backed; no native .node)
-const { Database } = require('node-sqlite3-wasm');
+// const { Database } = require('node-sqlite3-wasm');
+const { Database } = require('node-sqlite3-wasm/dist/node-sqlite3-wasm.js');
 
 /**
  * DatabaseRepository using node-sqlite3-wasm (sync core; promise-wrapped helpers)

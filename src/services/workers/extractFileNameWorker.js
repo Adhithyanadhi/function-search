@@ -45,6 +45,7 @@ async function processFiles() {
 }
 
 async function extractFileNames(task) {
+	logger.debug("new task extractfilenames", task.filePath, task.extension);
 	const files = preprocessFiles(task.filePath, task.extension);
 
 	for (const filePath of files) {
@@ -52,6 +53,7 @@ async function extractFileNames(task) {
 		if (!supportedExtensions.includes(fileExtension)) {continue;}
 
 		while (ingress >= MAX_INGRES_X_FUNCTION) {
+			logger.debug("Max ingress reached", ingress);
 			await new Promise(resolve => setTimeout(resolve, X_FUNCTION_INGRES_TIMEOUT));
 		}
 
@@ -79,12 +81,13 @@ function preprocessFiles(absoluteFilePath, extension) {
 
 	function readDirRecursive(fullPath) {
 		try {
-			const stat = fs.statSync(fullPath);
-			const lastSeen = inodeModifiedAt.get(fullPath) || 0;
-
 			if (isExcluded(fullPath)) {
 				return;
 			}
+
+			const stat = fs.statSync(fullPath);
+			const lastSeen = inodeModifiedAt.get(fullPath) || 0;
+
 
 			if (stat.isDirectory()) {
 				inodeModifiedAt.set(fullPath, stat.mtimeMs);
@@ -92,10 +95,9 @@ function preprocessFiles(absoluteFilePath, extension) {
 					readDirRecursive(path.join(fullPath, entry));
 				});
 			} else {
-			if (stat.mtimeMs <= lastSeen) {
+				if (stat.mtimeMs <= lastSeen) {
 					return;
-			}
-
+				}
 				inodeModifiedAt.set(fullPath, stat.mtimeMs);
 				handleFiles(fullPath);
 			}

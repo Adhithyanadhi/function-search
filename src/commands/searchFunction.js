@@ -25,7 +25,7 @@ class SearchFunctionCommand extends BaseCommand {
     }
 
     register(context) {
-        const disposable = vscode.commands.registerCommand('function-name-search.searchFunction', async () => {
+        const disposable = vscode.commands.registerCommand('extension.searchFunction', async () => {
             if (this.indexerService.functionIndex.size === 0) {
                 try {
                     if (this.indexerService.bus && this.indexerService.workspacePath) {

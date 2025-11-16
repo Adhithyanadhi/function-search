@@ -5,18 +5,80 @@
   "version": "0.5.0",
   "description": "Search & Navigate functions instantly",
   "license": "MIT",
-  "engines": { "vscode": "^1.80.0" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Adhithyanadhi/function-search"
+  },
+  "bugs": {
+    "url": "https://github.com/Adhithyanadhi/function-search/issues"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "categories": [
+    "Programming Languages",
+    "Other",
+    "Language Packs"
+  ],
+  "keywords": [
+    "function search",
+    "func search",
+    "function name search",
+    "func name search",
+    "navigate",
+    "code navigation",
+    "go to definition",
+    "go to function",
+    "go to func",
+    "go to func definition",
+    "go to function definition",
+    "symbol search",
+    "fast search",
+    "index functions",
+    "index func",
+    "function navigation",
+    "func navigation"
+  ],
+  "icon": "icons/icon.png",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:function-name-search.searchFunction",
-    "onCommand:function-name-search.clearIndex",
     "onView:function-name-search"
   ],
   "main": "./src/extension.js",
   "contributes": {
     "commands": [
-      { "command": "function-name-search.searchFunction", "title": "Function Name Search: Search Function" },
-      { "command": "function-name-search.clearIndex", "title": "Function Name Search: Clear Index" }
+      {
+        "command": "extension.searchFunction",
+        "title": "Function Name Search: Search Function"
+      },
+      {
+        "command": "extension.clearIndex",
+        "title": "Function Name Search: Clear Index"
+      },
+      {
+        "command": "extension.writeToCache",
+        "title": "Function Name Search: Write to Cache"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "extension.searchFunction",
+        "key": "ctrl+k",
+        "when": "!functionSearch.isCursor"
+      },
+      {
+        "command": "extension.searchFunction",
+        "key": "ctrl+shift+k",
+        "when": "functionSearch.isCursor"
+      },
+      {
+        "command": "extension.searchFunction",
+        "key": "ctrl+shift+k",
+        "when": "!functionSearch.isCursor"
+      }
     ]
   },
   "scripts": {
