@@ -22,16 +22,21 @@ class FunctionIndexCacheWriter extends CacheWriterStrategy {
     const upsertName = this.repository.getPreparedStatement(
       'INSERT OR IGNORE INTO function_names (functionName) VALUES (?)'
     );
+    const upsertFileCache = this.repository.getPreparedStatement(
+      'INSERT OR IGNORE INTO file_cache (fileName) VALUES (?)'
+    );
     const insertOccurrence = this.repository.getPreparedStatement(
       'INSERT OR IGNORE INTO function_occurrences (functionName, fileName) VALUES (?, ?)'
     );
 
     // Precompute
     const allFunctionNames = new Set();
+    const allFileNames = new Set();
     const fileFunctionPairs = [];
 
     for (const [filePath, functions] of map) {
       const names = this.extractUniqueFunctionNames(functions);
+      allFileNames.add(filePath);
       for (const fn of names) {
         allFunctionNames.add(fn);
         fileFunctionPairs.push([fn, filePath]);
@@ -39,6 +44,10 @@ class FunctionIndexCacheWriter extends CacheWriterStrategy {
     }
 
     const tx = this.repository.transaction(async () => {
+      console.log("transaction functionindexcache");
+      for (const fn of allFileNames) {
+        await upsertFileCache.run(fn);
+      }
       for (const fn of allFunctionNames) {
         await upsertName.run(fn);
       }
@@ -52,6 +61,7 @@ class FunctionIndexCacheWriter extends CacheWriterStrategy {
     });
 
     try {
+      logger.debug(`[FunctionIndexCacheWriter] Writing ${map.size} files, ${allFunctionNames.size} unique functions`);
       await tx();
       logger.debug(`[FunctionIndexCacheWriter] Wrote ${map.size} files, ${allFunctionNames.size} unique functions`);
     } catch (e) {

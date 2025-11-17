@@ -55,6 +55,7 @@ class DatabaseRepository extends BaseService {
       this.db.exec('PRAGMA journal_mode=WAL;');
       this.db.exec('PRAGMA synchronous=NORMAL;'); // use OFF only for one-time bulk loads
       this.db.exec('PRAGMA temp_store=MEMORY;');
+      this.db.exec('PRAGMA busy_timeout=500;');
 
       const cacheKB = Number(configLoader.get('SQLITE_CACHE_SIZE_KB', 200 * 1024));
       if (Number.isFinite(cacheKB) && cacheKB > 0) {

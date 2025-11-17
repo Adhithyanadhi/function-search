@@ -36,10 +36,7 @@ class WriteToCacheCommand extends BaseCommand {
             }
 
             const dbFile = path.join(baseDir, 'db.sqlite');
-            console.log("dbfile path", dbFile);
-            this.indexerService.bus.writeCacheToFile(getDBDir());
-            console.log("dbfile path sucess", dbFile);
-
+            this.indexerService.bus.writeCacheToFile({ dbPath: getDBDir(), data: this.indexerService.functionIndex.getNewData()});
         } catch (err) {
             logger.error("[FunctionSearch] Failed to clear function index:", err);
             vscode.window.showErrorMessage("Failed to clear function index. See console for details.");

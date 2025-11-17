@@ -104,7 +104,7 @@ class SearchFunctionCommand extends BaseCommand {
      */
     async searchFallbackCandidates(baseDir, windowStartMs, names, limit) {
         const dbRepo = this.container.get('databaseRepository');
-        const handle = dbRepo.ensureOpen(baseDir);
+        const handle = dbRepo.db;
         if (!Array.isArray(names) || names.length === 0) {return [];}
         const capped = names.slice(0, limit);
 

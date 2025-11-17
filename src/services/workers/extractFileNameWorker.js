@@ -127,12 +127,8 @@ function serve(message) {
 	} else if (message.type === INODE_MODIFIED_AT) {
 		logger.debug('[Worker:extractFileName] set inodeModifiedAt map');
 		inodeModifiedAt = (message.payload && message.payload.map) || message.data;
-	} else if (message.type === WRITE_CACHE_TO_FILE) {
-		parentBus.postMessage(WRITE_CACHE_TO_FILE, {
-			filePath: (message.payload && message.payload.filePath) || message.filePath,
-			inodeModifiedAt,
-		}, 'low')
 	} else {
+		logger.debug('[Worker:extractFileName] unhandled msg', message);
 	}
 }
 

@@ -26,16 +26,16 @@ class WorkerBus {
         this.sender.postMessage({ type: EXTRACT_FILE_NAMES, priority, payload });
     }
 
-    writeCacheToFile(filePath, priority = 'low') {
-        this.sender.postMessage({ type: WRITE_CACHE_TO_FILE, priority, payload: { filePath } });
+    writeCacheToFile(payload, priority = 'low') {
+        this.sender.postMessage({ type: WRITE_CACHE_TO_FILE, priority, payload });
     }
 
     setInodeModifiedAt(data, priority = 'low') {
         this.sender.postMessage({ type: INODE_MODIFIED_AT, priority, payload: { map: data } });
     }
 
-    flushLastAccess(priority = 'low') {
-        this.sender.postMessage({ type: FLUSH_LAST_ACCESS, priority });
+    flushLastAccess(payload, priority = 'low') {
+        this.sender.postMessage({ type: FLUSH_LAST_ACCESS, priority, payload });
     }
 }
 

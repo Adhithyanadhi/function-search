@@ -1,88 +1,124 @@
-const logger = require('../../utils/logger');
-const { parentPort } = require('worker_threads');
-const { WRITE_CACHE_TO_FILE, FLUSH_LAST_ACCESS } = require('../../config/constants');
+'use strict';
 
-// Import the new service classes
+const { parentPort } = require('worker_threads');
+const { ServiceContainer } = require('../core/serviceContainer');
 const { DatabaseRepository } = require('../database/databaseRepository');
 const { CacheWriterService } = require('../database/cacheWriterService');
-const { DualBufferManager } = require('../dualBufferManager');
+const { WRITE_CACHE_TO_FILE, FLUSH_LAST_ACCESS } = require('../../config/constants');
+const logger = require('../../utils/logger');
 
-// Create service instances for worker thread
+const container = new ServiceContainer();
+
 let dbRepo = null;
 let cacheWriter = null;
-let functionIndexBuffer = null;
-let lastAccessBuffer = null;
 
-// Initialize services
+/**
+ * Initialize services in the worker:
+ * - DatabaseRepository (for SQLite access)
+ * - CacheWriterService (for functionIndex / lastAccess writers)
+ */
 async function initializeServices() {
     try {
-        // Create a minimal container-like object for worker thread
-        const container = {
-            get: (serviceName) => {
-                switch (serviceName) {
-                    case 'databaseRepository':
-                        return dbRepo;
-                    case 'cacheWriterService':
-                        return cacheWriter;
-                    case 'functionIndexBuffer':
-                        return functionIndexBuffer;
-                    case 'lastAccessBuffer':
-                        return lastAccessBuffer;
-                    default:
-                        throw new Error(`Service ${serviceName} not found in worker`);
-                }
-            }
-        };
+        container.register('databaseRepository',() => new DatabaseRepository(container),true);
+        container.register('cacheWriterService', () => new CacheWriterService(container),true);
 
-        // Initialize services
-        dbRepo = new DatabaseRepository(container);
+        dbRepo = container.get('databaseRepository');
+        cacheWriter = container.get('cacheWriterService');
+
         await dbRepo.initialize();
-        
-        cacheWriter = new CacheWriterService(container);
         await cacheWriter.initialize();
-        
-        functionIndexBuffer = new DualBufferManager(container, 'FunctionIndex');
-        await functionIndexBuffer.initialize();
-        
-        lastAccessBuffer = new DualBufferManager(container, 'LastAccess');
-        await lastAccessBuffer.initialize();
-        
-        inodeModifiedAtBuffer = new DualBufferManager(container, 'InodeModifiedAt');
-        await inodeModifiedAtBuffer.initialize();
-        
+
         logger.debug('[DiskWorker] Services initialized');
-    } catch (e) {
-        logger.error('[DiskWorker] Failed to initialize services:', e);
+    } catch (err) {
+        logger.error('[DiskWorker] Failed to initialize services:', err);
     }
 }
 
-// Initialize services on startup
-initializeServices();
-
-parentPort.on('message', async (message) => {
-	try {
-		if (message.type === WRITE_CACHE_TO_FILE) {
-			if (functionIndexBuffer && functionIndexBuffer.isDirty()) {
-				const newData = functionIndexBuffer.getNewData();
-				if (newData.length > 0) {
-					await cacheWriter.write('functionIndex', newData);
-					functionIndexBuffer.clearNewBuffer();
-				}
-			}
-		} else if (message.type === FLUSH_LAST_ACCESS) {
-			if (lastAccessBuffer && lastAccessBuffer.isDirty()) {
-				const newData = lastAccessBuffer.getNewData();
-				if (newData.length > 0) {
-					await cacheWriter.write('lastAccess', newData);
-					lastAccessBuffer.clearNewBuffer();
-				}
-			}
-		} else {
-			logger.debug("Received unknown message type in diskWorker:", message);
-		}
-	} catch (err) {
-		logger.error("DB write failed:", err);
-	}
+// Start initialization immediately
+const initPromise = initializeServices().catch((err) => {
+    logger.error('[DiskWorker] Initialization error:', err);
 });
 
+/**
+ * Single-writer queue:
+ *
+ * We chain all write jobs onto this Promise so that only ONE
+ * write is active at any time, even though the worker receives
+ * multiple messages.
+ *
+ * Any new job waits for the previous job (and init) to complete.
+ */
+let writeChain = initPromise;
 
+/**
+ * Enqueue a write job (functionIndex or lastAccess).
+ * type: WRITE_CACHE_TO_FILE | FLUSH_LAST_ACCESS
+ * payload: { dbPath, data }
+ */
+function enqueueWrite(type, payload) {
+    // Normalize payload
+    const safePayload = payload || {};
+
+    writeChain = writeChain
+        .then(async () => {
+            // Guard: services must be ready
+            if (!dbRepo || !cacheWriter) {
+                logger.error('[DiskWorker] Write requested before services are ready');
+                return;
+            }
+
+            const { dbPath, data } = safePayload;
+
+            if (!dbPath) {
+                logger.error('[DiskWorker] Missing dbPath in write payload', data);
+                return;
+            }
+
+            if (data.length === 0) {
+                return;
+            }
+
+            try {
+                // Lazily open DB in this worker process
+                dbRepo.ensureOpen(dbPath);
+
+                const cacheName = type === WRITE_CACHE_TO_FILE ? 'functionIndex' : 'lastAccess';
+
+                await cacheWriter.write(cacheName, data);
+            } catch (err) {
+                logger.error(
+                    `[DiskWorker] Failed to write ${type === WRITE_CACHE_TO_FILE ? 'functionIndex' : 'lastAccess'}:`,
+                    err
+                );
+                // NOTE: We intentionally do NOT throw here, so the chain continues.
+                // If you want retries, you can handle them here.
+            }
+        })
+        .catch((err) => {
+            // Catch any unexpected errors in the chain and keep it alive
+            logger.error('[DiskWorker] Unexpected error in write chain:', err);
+        });
+}
+
+// Message handler: just route to the queue, do NOT await writes here
+parentPort.on('message', (message) => {
+if (!message || !message.type) return;
+
+    try {
+        switch (message.type) {
+            case WRITE_CACHE_TO_FILE:
+                enqueueWrite(WRITE_CACHE_TO_FILE, message.payload);
+                break;
+
+            case FLUSH_LAST_ACCESS:
+                enqueueWrite(FLUSH_LAST_ACCESS, message.payload);
+                break;
+
+            default:
+                logger.debug('[DiskWorker] Received unknown message type:', message.type);
+                break;
+        }
+    } catch (err) {
+        logger.error('[DiskWorker] Error handling message:', err);
+    }
+});

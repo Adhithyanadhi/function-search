@@ -30,6 +30,7 @@ class IndexerService extends BaseService {
     constructor(container) {
         super(container);
         this.functionIndex = null;
+        this.lastAccessIndex = null;
         this.fileWorker = undefined;
         this.workspacePath = undefined;
         this.currentFileExtension = "";
@@ -50,10 +51,12 @@ class IndexerService extends BaseService {
         this.dbRepo = this.container.get('databaseRepository');
         this.cacheWriter = this.container.get('cacheWriterService');
         this.functionIndex = this.container.get('functionIndexBuffer');
+        this.lastAccessIndex = this.container.get('lastAccessBuffer');
         this.iconResolver = this.container.get('iconResolverService');
         
         logger.debug('[IndexerService] Initialized');
     }
+
     async initializeCore(context) {
         const workspacePath = getWorkspacePath();
         if (!workspacePath) {return false;}
@@ -115,10 +118,11 @@ class IndexerService extends BaseService {
         const interval =  SNAPSHOT_TO_DISK_INTERVAL;
         this.intervalHandle = setInterval(async () => {
             try {
-                this.bus.writeCacheToFile(getDBDir());
+                this.bus.writeCacheToFile({dbPath: getDBDir(), data: this.functionIndex.getNewData()});
+                this.functionIndex.clearNewBuffer();
             } catch {}
             try {
-                this.bus.flushLastAccess('low');
+                this.bus.flushLastAccess({dbPath: getDBDir(), data: this.lastAccessIndex.getNewData()});
             } catch {}
         }, interval);
     }
@@ -151,7 +155,7 @@ class IndexerService extends BaseService {
         const inodeModifiedAt = new Map();
         const functionIndex = new Map();
         try {
-            const handle = this.dbRepo.ensureOpen(baseDir);
+            const handle = this.dbRepo.db;
             const inodeRows = handle.prepare('SELECT fileName, inodeModifiedAt FROM file_cache').all();
             for (const r of inodeRows) {
                 if (r.inodeModifiedAt != null) {inodeModifiedAt.set(r.fileName, r.inodeModifiedAt);}
@@ -171,7 +175,7 @@ class IndexerService extends BaseService {
      * Get recent file paths from database
      */
     async getRecentFilePaths(baseDir, windowStartMs) {
-        const handle = this.dbRepo.ensureOpen(baseDir);
+        const handle = this.dbRepo.db;
         try {
             const rows = handle.prepare('SELECT fileName FROM file_cache WHERE lastAccessedAt IS NOT NULL AND lastAccessedAt >= ?').all(windowStartMs);
             return rows.map(r => r.fileName);
@@ -185,7 +189,7 @@ class IndexerService extends BaseService {
      * Get functions for a specific file
      */
     async getFunctionsForFile(baseDir, filePath) {
-        const handle = this.dbRepo.ensureOpen(baseDir);
+        const handle = this.dbRepo.db;
         try {
             const row = handle.prepare('SELECT functions FROM file_functions WHERE fileName = ?').get(filePath);
             if (!row || !row.functions) {return [];}
@@ -201,7 +205,7 @@ class IndexerService extends BaseService {
      * Get all function names from database
      */
     async getAllFunctionNames() {
-        const handle = this.dbRepo.ensureOpen(getDBDir());
+        const handle = this.dbRepo.db;
         try {
             const rows = handle.prepare('SELECT functionName FROM function_names').all();
             return rows.map(r => r.functionName);
@@ -215,8 +219,7 @@ class IndexerService extends BaseService {
      * Mark file as accessed
      */
     markFileAccessed(filePath) {
-        const lastAccessBuffer = this.container.get('lastAccessBuffer');
-        lastAccessBuffer.set(filePath, Date.now());
+        this.lastAccessIndex.set(filePath, Date.now());
     }
 
     setCurrentFileExtension(ext){
@@ -309,8 +312,8 @@ class IndexerService extends BaseService {
         try { if (this.watcher) {this.watcher.dispose();} } catch {}
         try { 
             if (this.bus) {
-                this.bus.writeCacheToFile(getDBDir());
-                this.bus.flushLastAccess();
+                this.bus.writeCacheToFile({dbPath: getDBDir(), data: this.functionIndex.getNewData()});
+                this.bus.flushLastAccess({dbPath: getDBDir(), data: this.lastAccessIndex.getNewData()});
             }
         } catch {}
     }
