@@ -12,6 +12,7 @@ function getWorkspaceKey(workspacePath) {
 }
 
 let dbDir = '';
+let extensionUri = undefined;
 
 async function initializeEnvironment(context) {
   const workspacePath = getWorkspacePath();
@@ -33,6 +34,7 @@ async function initializeEnvironment(context) {
   await fs.mkdir(baseDir, { recursive: true });
 
   dbDir = baseDir;
+  extensionUri = getExtensionUri();
 }
 
 function getDBDir() {
@@ -59,10 +61,19 @@ function getWorkspaceFolder(workspacePath) {
   }
 }
 
+function getExtensionUri(){
+  if(!extensionUri){
+    const ext = vscode.extensions.getExtension('AmbitiousCoder.function-name-search');
+    extensionUri = ext?.extensionUri;
+  }
+  return extensionUri
+}
+
 module.exports = {
   initializeEnvironment,
   getDBDir,
   getWorkspacePath,
+  getExtensionUri,
   getWorkspaceFolder
 };
 

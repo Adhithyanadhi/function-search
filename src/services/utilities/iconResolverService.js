@@ -1,5 +1,9 @@
 const logger = require('../../utils/logger');
 const { BaseService } = require('../core/baseService');
+const { getExtensionUri } = require('../../utils/vscode');
+const { FILE_PROPERTIES } = require('../../config/constants');
+const vscode = require('vscode');
+
 
 /**
  * Icon Resolver Service - Enhanced icon management
@@ -16,38 +20,19 @@ class IconResolverService extends BaseService {
      */
     async initialize() {
         await super.initialize();
-        this.loadDefaultIcons();
+        this.registerIcons();
         logger.debug('[IconResolverService] Initialized');
     }
 
-    /**
-     * Load default icon mappings
-     * @private
-     */
-    loadDefaultIcons() {
-        const defaultIcons = {
-            'js': 'js.svg',
-            'ts': 'ts.svg',
-            'py': 'py.svg',
-            'java': 'java.svg',
-            'go': 'go.svg',
-            'rs': 'rs.svg',
-            'rb': 'rb.svg'
-        };
-
-        for (const [extension, iconFile] of Object.entries(defaultIcons)) {
-            this.registerIcon(extension, iconFile);
-        }
-    }
-
-    /**
-     * Register an icon for an extension
-     * @param {string} extension - File extension
-     * @param {string} iconPath - Icon file path
-     */
-    registerIcon(extension, iconPath) {
-        this.iconPaths.set(extension, iconPath);
-        logger.debug(`[IconResolverService] Registered icon for ${extension}: ${iconPath}`);
+    registerIcons() {
+        const extensionUri = getExtensionUri();
+        Object.entries(FILE_PROPERTIES).forEach(([extension, val]) => {
+            if(val.fileIcon){
+                const uri = vscode.Uri.joinPath(extensionUri, 'icons', val.fileIcon);
+                this.iconPaths.set(extension, uri);
+                logger.debug(`[IconResolverService] Registered icon for ${extension}: ${val.fileIcon} :${uri}`);
+            }
+        });
     }
 
     /**
