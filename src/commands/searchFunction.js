@@ -105,7 +105,7 @@ class SearchFunctionCommand extends BaseCommand {
     async searchFallbackCandidates(baseDir, windowStartMs, names, limit) {
         const dbRepo = this.container.get('databaseRepository');
         const handle = dbRepo.db;
-        if (!Array.isArray(names) || names.length === 0) {return [];}
+        if (names.length === 0) {return [];}
         const capped = names.slice(0, limit);
 
         const candidateFilePaths = await this.getCandidateFilePathsForFallback(handle, capped, windowStartMs, limit);

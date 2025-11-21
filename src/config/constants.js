@@ -48,9 +48,11 @@ const FILE_PROPERTIES = {
     },
     ".c": {
         regex: /^\s*(?:[a-zA-Z_][\w\s\*]*\s+)+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+        fileIcon: 'c.svg'
     },
     ".cpp": {
         regex: /^\s*(?:[a-zA-Z_][\w\s:<>\*&]*\s+)+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+        fileIcon: 'cpp.svg'
     },
     ".cs": {
         regex: /^\s*(?:public|private|protected|internal)?\s*(?:static\s+)?[\w<>\[\],\s]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,

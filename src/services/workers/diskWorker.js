@@ -80,7 +80,7 @@ function enqueueWrite(type, payload) {
 
             try {
                 // Lazily open DB in this worker process
-                dbRepo.ensureOpen(dbPath);
+                dbRepo.ensureOpen(dbPath, false);
 
                 const cacheName = type === WRITE_CACHE_TO_FILE ? 'functionIndex' : 'lastAccess';
 

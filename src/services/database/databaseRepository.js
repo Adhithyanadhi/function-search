@@ -40,14 +40,15 @@ class DatabaseRepository extends BaseService {
    * @param {string} baseDir directory for db.sqlite
    * @returns {import('node-sqlite3-wasm').Database}
    */
-  ensureOpen(baseDir) {
+  ensureOpen(baseDir, readOnly) {
+    logger.debug('[DatabaseRepository] is readOnly', readOnly);
     if (this.db) return this.db;
 
     fs.mkdirSync(baseDir, { recursive: true });
     this.dbPath = path.join(baseDir, 'db.sqlite');
 
     // Open file-backed DB (WASM + Node-FS VFS)
-    this.db = new Database(this.dbPath);
+    this.db = new Database(this.dbPath, {readOnly});
 
     // PRAGMAs tuned for local metadata/indexing workloads
     try {
@@ -55,7 +56,7 @@ class DatabaseRepository extends BaseService {
       this.db.exec('PRAGMA journal_mode=WAL;');
       this.db.exec('PRAGMA synchronous=NORMAL;'); // use OFF only for one-time bulk loads
       this.db.exec('PRAGMA temp_store=MEMORY;');
-      this.db.exec('PRAGMA busy_timeout=500;');
+      if(readOnly){ db.exec("PRAGMA query_only = ON;");}
 
       const cacheKB = Number(configLoader.get('SQLITE_CACHE_SIZE_KB', 200 * 1024));
       if (Number.isFinite(cacheKB) && cacheKB > 0) {

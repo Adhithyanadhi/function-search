@@ -26,7 +26,7 @@ async function activate(context) {
         
         // Initialize database
         const dbRepo = bootstrap.getService('databaseRepository');
-        dbRepo.ensureOpen(getDBDir());
+        dbRepo.ensureOpen(getDBDir(), true);
         
     } catch (e) {
         console.warn('[Extension] Service initialization failed:', e);
