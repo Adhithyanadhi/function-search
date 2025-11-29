@@ -26,6 +26,7 @@ class DatabaseRepository extends BaseService {
     this.db = null;
     this.dbPath = null;
     this.prepared = new Map(); // sql -> wrapped stmt
+    this.readOnly = false;
   }
 
   async initialize() {
@@ -33,7 +34,14 @@ class DatabaseRepository extends BaseService {
     logger.debug('[DatabaseRepository] Initialized');
   }
 
-  /**
+  create(readOnly){
+    try{
+      return new Database(this.dbPath, {readOnly});
+    } catch (e){
+      logger.warn("Db initialization failed", e);
+    }  
+  }
+    /**
    * Ensure database connection is open (creates file if absent)
    * SYNC: returns the Database instance directly.
    *
@@ -41,14 +49,21 @@ class DatabaseRepository extends BaseService {
    * @returns {import('node-sqlite3-wasm').Database}
    */
   ensureOpen(baseDir, readOnly) {
-    logger.debug('[DatabaseRepository] is readOnly', readOnly);
+    logger.debug('[DatabaseRepository] is readOnly', readOnly, baseDir);
     if (this.db) return this.db;
 
     fs.mkdirSync(baseDir, { recursive: true });
     this.dbPath = path.join(baseDir, 'db.sqlite');
+    // If db file does NOT exist, create it
+    if (!fs.existsSync(this.dbPath)) {
+      // Create an empty file so opening in readOnly won't fail
+      fs.closeSync(fs.openSync(this.dbPath, 'w'));
+    }
+
+    this.db = this.create(readOnly);
+    this.readOnly = readOnly;
 
     // Open file-backed DB (WASM + Node-FS VFS)
-    this.db = new Database(this.dbPath, {readOnly});
 
     // PRAGMAs tuned for local metadata/indexing workloads
     try {
@@ -56,7 +71,7 @@ class DatabaseRepository extends BaseService {
       this.db.exec('PRAGMA journal_mode=WAL;');
       this.db.exec('PRAGMA synchronous=NORMAL;'); // use OFF only for one-time bulk loads
       this.db.exec('PRAGMA temp_store=MEMORY;');
-      if(readOnly){ db.exec("PRAGMA query_only = ON;");}
+      if(readOnly){ this.db.exec("PRAGMA query_only = ON;");}
 
       const cacheKB = Number(configLoader.get('SQLITE_CACHE_SIZE_KB', 200 * 1024));
       if (Number.isFinite(cacheKB) && cacheKB > 0) {
@@ -80,7 +95,12 @@ class DatabaseRepository extends BaseService {
    * Create schema if missing (SYNC)
    */
   createSchema() {
-    if (!this.db) return;
+    let writeConn = null;
+    if(this.readOnly){
+      writeConn = this.create(false);
+    } else {
+      writeConn = this.db
+    }
 
     const sql = `
       CREATE TABLE IF NOT EXISTS file_cache (
@@ -103,24 +123,26 @@ class DatabaseRepository extends BaseService {
 
       CREATE INDEX IF NOT EXISTS idx_file_cache_last_accessed ON file_cache(lastAccessedAt);
       CREATE INDEX IF NOT EXISTS idx_function_names_functionName ON function_names(functionName);
-      CREATE INDEX IF NOT EXISTS idx_function_occurrences_fileName ON function_occurrences(fileName);
+      CREATE INDEX IF NOT EXISTS idx_function_occurrences_functionName ON function_occurrences(functionName);
     `;
 
     try {
-      this.db.exec(sql);
+      writeConn.exec(sql);
     } catch (e) {
-      logger.error('[DatabaseRepository] createSchema failed:', e);
+      logger.warn('[DatabaseRepository] createSchema failed:', e);
     }
   }
 
-  /**
-   * Prepare & cache a statement; returns promise-wrapped helpers for compatibility.
-   */
   getPreparedStatement(sql) {
-    if (this.prepared.has(sql)) return this.prepared.get(sql);
+    if (!this.db) throw new Error('Database not open');
+
+    if (this.prepared.has(sql)) {
+      return this.prepared.get(sql);
+    }
 
     const stmt = this.db.prepare(sql);
-    const wrap = {
+
+    const wrapped = {
       run: (...args) => {
         try {
           const info = stmt.run(...args);
@@ -152,31 +174,25 @@ class DatabaseRepository extends BaseService {
         } catch (e) {
           return Promise.reject(e);
         }
-      },
-      _raw: stmt
+      }
     };
 
-    this.prepared.set(sql, wrap);
-    return wrap;
+    this.prepared.set(sql, wrapped);
+    return wrapped;
   }
 
   clearPrepared() {
-    for (const w of this.prepared.values()) {
-      try { w._raw.finalize(); } catch {}
+    for (const [sql, stmt] of this.prepared.entries()) {
+      try { stmt.finalize(); } catch {}
+      this.prepared.delete(sql);
     }
-    this.prepared.clear();
   }
 
-  /**
-   * Transaction helper (BEGIN/COMMIT/ROLLBACK) with async signature.
-   * Usage:
-   *   const tx = repo.transaction(async () => { await stmt.run(...); });
-   *   await tx();
-   */
   transaction(fn) {
     return async (...args) => {
+      if (!this.db) {throw new Error('Database not open');}
       try {
-        this.db.exec('BEGIN IMMEDIATE;');
+        this.db.exec('BEGIN;');
         await fn(...args);
         this.db.exec('COMMIT;');
       } catch (e) {
@@ -184,6 +200,10 @@ class DatabaseRepository extends BaseService {
         throw e;
       }
     };
+  }
+
+  run(sql){
+    this.db.exec(sql);
   }
 
   async exec(sql) {
@@ -200,6 +220,7 @@ class DatabaseRepository extends BaseService {
       this.clearPrepared();
       if (this.db) this.db.close();
       this.db = null;
+      this.openReadOnly = null;
       logger.debug('[DatabaseRepository] Database closed');
     } catch (e) {
       logger.warn('[DatabaseRepository] Error closing DB', e);
@@ -209,6 +230,218 @@ class DatabaseRepository extends BaseService {
   async dispose() {
     await this.close();
     await super.dispose();
+  }
+
+  /**
+   * Get candidate file paths for fallback search
+   */
+  async getCandidateFilePathsForFallback(names, windowStartMs, limit) {
+    console.log("called getCandidateFilePathsForFallback");
+    const inPlaceholders = names.map(() => '?').join(',');
+    const candidateFilePathsQuery = `
+        SELECT DISTINCT fo.fileName AS filePath
+        FROM function_occurrences fo0
+        JOIN file_cache fc ON fc.fileName = fo.fileName
+        WHERE fo.functionName IN (${inPlaceholders})
+          AND (fc.lastAccessedAt IS NULL OR fc.lastAccessedAt < ?)
+        LIMIT ?
+    `;
+    try {
+        const rows = this.db.prepare(candidateFilePathsQuery).all(...names, windowStartMs, limit);
+        return rows.map(r => r.filePath);
+    } catch (e) {
+        logger.error('[SearchFunctionCommand] getCandidateFilePathsForFallback failed:', e);
+        return [];
+    }
+  }
+
+  deleteAllCache(){
+    logger.info("deleteAllCache is called with ", this.readOnly)
+    try{
+      const rows = this.db.all('PRAGMA database_list');
+      console.log("database list is", rows);
+
+      this.db.prepare(`delete from file_cache`).run();
+      this.db.prepare(`delete from function_names`).run();
+      this.db.prepare(`delete from file_functions`).run();
+      this.db.prepare(`delete from function_occurrences`).run();
+      logger.info('[DatabaseRepository] deleteAllCache success:');
+    } catch(e){
+        logger.error('[DatabaseRepository] deleteAllCache failed:', e);
+        return false;
+    }
+    return true;
+  }
+
+  getSelectByFilePathsStmt(filePaths) {
+    const placeholders = filePaths.map(_ => '?').join(',');
+    const sql = `
+      SELECT fc.fileName, fc.inodeModifiedAt, fc.lastAccessedAt, ff.functions
+      FROM file_cache fc
+      LEFT JOIN file_functions ff ON ff.fileName = fc.fileName
+      WHERE fc.fileName IN (${placeholders})
+    `;
+    return this.db.prepare(sql);
+  }
+
+  /**
+   * Load startup cache from database
+   */
+  async loadStartupCache(baseDir, windowStartMs) {
+      const inodeModifiedAt = new Map();
+      const functionIndex = new Map();
+      try {
+          const base = baseDir || path.dirname(this.dbPath);
+          if (!this.db) this.ensureOpen(base, true);
+
+          const filePaths = await this.getRecentFilePaths(base, windowStartMs);
+          const stmt = this.getSelectByFilePathsStmt(filePaths);
+
+          const rows = stmt.all(...filePaths);
+          for (const r of rows) {
+              inodeModifiedAt.set(r.fileName, r.inodeModifiedAt);
+              if (r.functions) {
+                  try {
+                      functionIndex.set(r.fileName, JSON.parse(r.functions));
+                  } catch {
+                      functionIndex.set(r.fileName, []);
+                  }
+              }
+          }
+      } catch (e) {
+          logger.error('[Indexer] loadStartupCache failed:', e);
+      }
+      return { inodeModifiedAt, functionIndex };
+  }
+
+  /**
+   * Get recent file paths from database
+   */
+  async getRecentFilePaths(baseDir, windowStartMs) {
+      try {
+          const rows = this.db.prepare(
+              'SELECT fileName FROM file_cache WHERE lastAccessedAt IS NOT NULL AND lastAccessedAt >= ?'
+          ).all(windowStartMs);
+          return rows.map(r => r.fileName);
+      } catch (e) {
+          logger.error('[Indexer] getRecentFilePaths failed:', e);
+          return [];
+      }
+  }
+
+  /**
+   * Get functions for file from database
+   */
+  async getFunctionsForFile(fileName) {
+      try {
+          const row = this.db.prepare('SELECT functions FROM file_functions WHERE fileName = ?').get(fileName);
+          if (!row || !row.functions) return [];
+          const arr = JSON.parse(row.functions);
+          return Array.isArray(arr) ? arr : [];
+      } catch (e) {
+          logger.error('[Indexer] getFunctionsForFile failed:', e);
+          return [];
+      }
+  }
+  /**
+   * Get all function names from database
+   */
+  async getAllFunctionNames() {
+    try {
+        const rows = this.db.prepare('SELECT functionName FROM function_names').all();
+        return rows.map(r => r.functionName);
+    } catch (e) {
+        logger.error('[Indexer] getAllFunctionNames failed:', e);
+        return [];
+    }
+  }
+
+
+  async lastaccessCachewrite(entries) {
+    const upsert = this.repository.getPreparedStatement(
+      'INSERT INTO file_cache (fileName, lastAccessedAt, inodeModifiedAt) VALUES (?, ?, ?) ' +
+      'ON CONFLICT(fileName) DO UPDATE SET ' +
+      '  lastAccessedAt = MAX(file_cache.lastAccessedAt, excluded.lastAccessedAt), ' +
+      '  inodeModifiedAt = excluded.inodeModifiedAt'
+    );
+
+    const tx = this.repository.transaction(async (normalized) => {
+      for (const [fileName, lastAccessedAt, inodeModifiedAt] of normalized) {
+        const last = typeof lastAccessedAt === 'number' ? lastAccessedAt : 0;
+        const inode = typeof inodeModifiedAt === 'number' ? inodeModifiedAt : null;
+        await upsert.run(fileName, last, inode);
+      }
+    });
+
+    try {
+      const normalized = normalizeEntries(entries);
+      await tx(normalized);
+      logger.debug(`[LastAccessCacheWriter] Wrote ${normalized.length} entries`);
+    } catch (e) {
+      logger.error('[LastAccessCacheWriter] Failed to write:', e);
+      throw e;
+    }
+  }
+
+
+  async functionCachewrite(newData) {
+    this.createSchema();
+    // Normalize input to Map
+    const map = newData instanceof Map ? newData : new Map(newData || []);
+
+    const upsertFunctions = this.getPreparedStatement(
+      'INSERT INTO file_functions (fileName, functions) VALUES (?, ?) ' +
+      'ON CONFLICT(fileName) DO UPDATE SET functions = excluded.functions'
+    );
+    const upsertName = this.getPreparedStatement(
+      'INSERT OR IGNORE INTO function_names (functionName) VALUES (?)'
+    );
+    const upsertFileCache = this.getPreparedStatement(
+      'INSERT OR IGNORE INTO file_cache (fileName) VALUES (?)'
+    );
+    const insertOccurrence = this.getPreparedStatement(
+      'INSERT OR IGNORE INTO function_occurrences (functionName, fileName) VALUES (?, ?)'
+    );
+
+    // Precompute
+    const allFunctionNames = new Set();
+    const allFileNames = new Set();
+    const fileFunctionPairs = [];
+
+    for (const [filePath, functions] of map) {
+      const names = getSetFromListFunction(functions);
+      allFileNames.add(filePath);
+      for (const fn of names) {
+        allFunctionNames.add(fn);
+        fileFunctionPairs.push([fn, filePath]);
+      }
+    }
+
+    const tx = this.transaction(async () => {
+      console.log("transaction functionindexcache");
+      for (const fn of allFileNames) {
+        await upsertFileCache.run(fn);
+      }
+      for (const fn of allFunctionNames) {
+        await upsertName.run(fn);
+      }
+      for (const [filePath, functions] of map) {
+        const json = JSON.stringify(functions || []);
+        await upsertFunctions.run(filePath, json);
+      }
+      for (const [fn, filePath] of fileFunctionPairs) {
+        await insertOccurrence.run(fn, filePath);
+      }
+    });
+
+    try {
+      logger.debug(`[FunctionIndexCacheWriter] Writing ${map.size} files, ${allFunctionNames.size} unique functions`);
+      await tx();
+      logger.debug(`[FunctionIndexCacheWriter] Wrote ${map.size} files, ${allFunctionNames.size} unique functions`);
+    } catch (e) {
+      logger.error('[FunctionIndexCacheWriter] Failed to write:', e);
+      throw e;
+    }
   }
 }
 

@@ -22,6 +22,7 @@ class SearchFunctionCommand extends BaseCommand {
         this.iconResolver = this.container.get('iconResolverService');
         // Get indexer service from container
         this.indexerService = this.container.get('indexerService');
+        this.dbRepo = this.container.get('databaseRepository');
     }
 
     register(context) {
@@ -103,47 +104,24 @@ class SearchFunctionCommand extends BaseCommand {
      * Search fallback candidates
      */
     async searchFallbackCandidates(baseDir, windowStartMs, names, limit) {
-        const dbRepo = this.container.get('databaseRepository');
-        const handle = dbRepo.db;
         if (names.length === 0) {return [];}
         const capped = names.slice(0, limit);
 
-        const candidateFilePaths = await this.getCandidateFilePathsForFallback(handle, capped, windowStartMs, limit);
+        const candidateFilePaths = await this.dbRepo.getCandidateFilePathsForFallback(capped, windowStartMs, limit);
         if (candidateFilePaths.length === 0) {return [];}
-        return await this.fetchFunctionBlobsForFiles(handle, candidateFilePaths, limit);
+        return await this.fetchFunctionBlobsForFiles(candidateFilePaths, limit);
     }
 
-    /**
-     * Get candidate file paths for fallback search
-     */
-    async getCandidateFilePathsForFallback(handle, names, windowStartMs, limit) {
-        const inPlaceholders = names.map(() => '?').join(',');
-        const candidateFilePathsQuery = `
-            SELECT DISTINCT fo.fileName AS filePath
-            FROM function_occurrences fo
-            JOIN file_cache fc ON fc.fileName = fo.fileName
-            WHERE fo.functionName IN (${inPlaceholders})
-              AND (fc.lastAccessedAt IS NULL OR fc.lastAccessedAt < ?)
-            LIMIT ?
-        `;
-        try {
-            const rows = handle.prepare(candidateFilePathsQuery).all(...names, windowStartMs, limit);
-            return rows.map(r => r.filePath);
-        } catch (e) {
-            logger.error('[SearchFunctionCommand] getCandidateFilePathsForFallback failed:', e);
-            return [];
-        }
-    }
 
     /**
      * Fetch function blobs for files
      */
-    async fetchFunctionBlobsForFiles(handle, filePaths, limit) {
+    async fetchFunctionBlobsForFiles(filePaths, limit) {
         const out = [];
         const chunkSize = 200;
         for (let i = 0; i < filePaths.length; i += chunkSize) {
             const chunk = filePaths.slice(i, i + chunkSize);
-            const stmt = this.getSelectByFilePathsStmt(handle, chunk.length);
+            const stmt = this.dbRepo.getSelectByFilePathsStmt(chunk.length);
             try {
                 const rows = stmt.all(...chunk);
                 out.push(...rows);
@@ -153,15 +131,6 @@ class SearchFunctionCommand extends BaseCommand {
             if (out.length >= limit) {break;}
         }
         return out.slice(0, limit);
-    }
-
-    /**
-     * Get prepared statement for selecting by file paths
-     */
-    getSelectByFilePathsStmt(dbHandle, n) {
-        const placeholders = new Array(n).fill('?').join(',');
-        const query = `SELECT fileName AS filePath, functions FROM file_functions WHERE fileName IN (${placeholders})`;
-        return dbHandle.prepare(query);
     }
 }
 

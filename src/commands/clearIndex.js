@@ -1,8 +1,10 @@
+const { resetInterval } = require ('../utils/common');
 const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
 const { BaseCommand } = require('../services/commands/baseCommand');
 const { getDBDir } = require('../utils/vscode');
+const logger = require('../utils/logger');
 
 class ClearIndexCommand extends BaseCommand {
     constructor(container) {
@@ -48,10 +50,12 @@ class ClearIndexCommand extends BaseCommand {
             this.indexerService.cachedFunctionList = [];
             this.indexerService.fileToRangeMap.clear();
             this.indexerService.prioritizeCurrentFileExtHandler();
+            resetInterval(this.indexerService.flushToDBIntervalHandle);
 
             vscode.window.showInformationMessage("Function index cleared. Reindexing...");
             if (this.indexerService.bus && workspacePath) {
                 this.indexerService.bus.setInodeModifiedAt(new Map(), 'high');
+                this.indexerService.deleteAllCache();
                 this.indexerService.bus.extractFileNames({ workspacePath, filePath: workspacePath, extension: "__all__", initialLoad: true }, 'low');
             }
         } catch (err) {

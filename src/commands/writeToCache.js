@@ -3,6 +3,7 @@ const path = require('path');
 const vscode = require('vscode');
 const { BaseCommand } = require('../services/commands/baseCommand');
 const { getDBDir } = require('../utils/vscode');
+const logger = require('../utils/logger');
 
 class WriteToCacheCommand extends BaseCommand {
     constructor(container) {
@@ -34,9 +35,7 @@ class WriteToCacheCommand extends BaseCommand {
                 vscode.window.showErrorMessage("No workspace detected; cannot clear index.");
                 return;
             }
-
-            const dbFile = path.join(baseDir, 'db.sqlite');
-            this.indexerService.bus.writeCacheToFile({ dbPath: getDBDir(), data: this.indexerService.functionIndex.getNewData()});
+            this.indexerService.writeCacheToFile();
         } catch (err) {
             logger.error("[FunctionSearch] Failed to clear function index:", err);
             vscode.window.showErrorMessage("Failed to clear function index. See console for details.");

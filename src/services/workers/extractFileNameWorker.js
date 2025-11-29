@@ -3,7 +3,7 @@ const { getExtensionFromFilePath, isExcluded } = require('../../utils/common')
 const { FUNCTION_EXTRACT_FILE_PATH, supportedExtensions, PROCESS_FILE_TIME_OUT, MAX_INGRES_X_FUNCTION, X_FUNCTION_INGRES_TIMEOUT } = require('../../config/constants');
 const { Worker, parentPort } = require('worker_threads');
 const { createParentBus, createChildBus } = require('../../services/messaging/workerBus');
-const { EXTRACT_FUNCTION_NAMES, EXTRACT_FILE_NAMES, WRITE_CACHE_TO_FILE, INODE_MODIFIED_AT, FETCHED_FUNCTIONS } = require('../../config/constants');
+const { EXTRACT_FUNCTION_NAMES, EXTRACT_FILE_NAMES, INODE_MODIFIED_AT, FETCHED_FUNCTIONS } = require('../../config/constants');
 
 const fs = require('fs');
 const path = require('path');

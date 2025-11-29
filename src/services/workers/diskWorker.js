@@ -4,7 +4,7 @@ const { parentPort } = require('worker_threads');
 const { ServiceContainer } = require('../core/serviceContainer');
 const { DatabaseRepository } = require('../database/databaseRepository');
 const { CacheWriterService } = require('../database/cacheWriterService');
-const { WRITE_CACHE_TO_FILE, FLUSH_LAST_ACCESS } = require('../../config/constants');
+const { WRITE_CACHE_TO_FILE, FLUSH_LAST_ACCESS, DELETE_ALL_CACHE } = require('../../config/constants');
 const logger = require('../../utils/logger');
 
 const container = new ServiceContainer();
@@ -12,11 +12,6 @@ const container = new ServiceContainer();
 let dbRepo = null;
 let cacheWriter = null;
 
-/**
- * Initialize services in the worker:
- * - DatabaseRepository (for SQLite access)
- * - CacheWriterService (for functionIndex / lastAccess writers)
- */
 async function initializeServices() {
     try {
         container.register('databaseRepository',() => new DatabaseRepository(container),true);
@@ -55,9 +50,8 @@ let writeChain = initPromise;
  * type: WRITE_CACHE_TO_FILE | FLUSH_LAST_ACCESS
  * payload: { dbPath, data }
  */
-function enqueueWrite(type, payload) {
-    // Normalize payload
-    const safePayload = payload || {};
+function enqueueWrite(message) {
+    const {type, payload} = message;
 
     writeChain = writeChain
         .then(async () => {
@@ -67,14 +61,10 @@ function enqueueWrite(type, payload) {
                 return;
             }
 
-            const { dbPath, data } = safePayload;
+            const { dbPath, data } = payload;
 
             if (!dbPath) {
                 logger.error('[DiskWorker] Missing dbPath in write payload', data);
-                return;
-            }
-
-            if (data.length === 0) {
                 return;
             }
 
@@ -82,12 +72,27 @@ function enqueueWrite(type, payload) {
                 // Lazily open DB in this worker process
                 dbRepo.ensureOpen(dbPath, false);
 
-                const cacheName = type === WRITE_CACHE_TO_FILE ? 'functionIndex' : 'lastAccess';
+                switch (type) {
+                    case WRITE_CACHE_TO_FILE:
+                        await cacheWriter.write('functionIndex', data);
+                        break;
 
-                await cacheWriter.write(cacheName, data);
+                    case FLUSH_LAST_ACCESS:
+                        await cacheWriter.write('lastAccess', data);
+                        break;
+
+                    case DELETE_ALL_CACHE:
+                        dbRepo.deleteAllCache();
+                        break;
+
+                    default:
+                        logger.debug('[DiskWorker] Received unknown message type:', message.type);
+                        break;
+                }
+
             } catch (err) {
                 logger.error(
-                    `[DiskWorker] Failed to write ${type === WRITE_CACHE_TO_FILE ? 'functionIndex' : 'lastAccess'}:`,
+                    `[DiskWorker] Failed to write ${message}:`,
                     err
                 );
                 // NOTE: We intentionally do NOT throw here, so the chain continues.
@@ -96,29 +101,12 @@ function enqueueWrite(type, payload) {
         })
         .catch((err) => {
             // Catch any unexpected errors in the chain and keep it alive
-            logger.error('[DiskWorker] Unexpected error in write chain:', err);
+            logger.error('[DiskWorker] Unexpected error in write chain:', err, message);
         });
 }
 
 // Message handler: just route to the queue, do NOT await writes here
 parentPort.on('message', (message) => {
 if (!message || !message.type) return;
-
-    try {
-        switch (message.type) {
-            case WRITE_CACHE_TO_FILE:
-                enqueueWrite(WRITE_CACHE_TO_FILE, message.payload);
-                break;
-
-            case FLUSH_LAST_ACCESS:
-                enqueueWrite(FLUSH_LAST_ACCESS, message.payload);
-                break;
-
-            default:
-                logger.debug('[DiskWorker] Received unknown message type:', message.type);
-                break;
-        }
-    } catch (err) {
-        logger.error('[DiskWorker] Error handling message:', err);
-    }
+    enqueueWrite(message);
 });

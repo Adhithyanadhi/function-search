@@ -78,6 +78,7 @@ const FETCHED_FUNCTIONS = 'fetchedFunctions';
 const WRITE_CACHE_TO_FILE = 'write-cache-to-file';
 const INODE_MODIFIED_AT = 'inodemodifiedat';
 const FLUSH_LAST_ACCESS = 'flush-last-access';
+const DELETE_ALL_CACHE = 'delete-all-cache';
 
 module.exports = {
     SNAPSHOT_TO_DISK_INTERVAL,
@@ -100,7 +101,8 @@ module.exports = {
     FETCHED_FUNCTIONS,
     WRITE_CACHE_TO_FILE,
     INODE_MODIFIED_AT,
-    FLUSH_LAST_ACCESS
+    FLUSH_LAST_ACCESS,
+    DELETE_ALL_CACHE
 };
 
 

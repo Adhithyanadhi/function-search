@@ -17,6 +17,7 @@ async function activate(context) {
 		await vscode.commands.executeCommand('setContext', 'functionSearch.isCursor', !!isCursor);
 	} catch {}
 
+    let dbReady = false;
     try {
         await initializeEnvironment(context);
         
@@ -24,12 +25,18 @@ async function activate(context) {
         bootstrap.registerServices();
         await bootstrap.initializeServices();
         
-        // Initialize database
+        // Initialize database (RO for main thread)
         const dbRepo = bootstrap.getService('databaseRepository');
         dbRepo.ensureOpen(getDBDir(), true);
+        dbReady = true;
         
     } catch (e) {
-        console.warn('[Extension] Service initialization failed:', e);
+        console.warn('[Extension] Service/DB initialization failed:', e);
+    }
+
+    if (!dbReady) {
+        console.error('[Extension] DB not ready; skipping indexer activation.');
+        return;
     }
 
     // Create indexer with service container
@@ -62,5 +69,3 @@ async function activate(context) {
 function deactivate() {}
 
 module.exports = { activate, deactivate };
-
-

@@ -38,6 +38,46 @@ function isExcluded(filePath) {
     return !filePath || invalidFilePath.some(suffix => filePath.includes(suffix));
 }
 
-module.exports = { isSubsequence, getDirPath, getExtensionFromFilePath, isExcluded, prioritizeCurrentFileExt };
+function resetInterval(handle){
+    clearInterval(handle);
+}
+
+
+function getSetFromListFunction(arr) {
+    const set = new Set();
+    for (const f of arr) {
+        if (f) {
+            set.add(f.name);
+        }
+    }
+    return set;
+}
+
+
+function normalizeEntries(entries) {
+  if (!entries) return [];
+  if (entries instanceof Map) {
+    const out = [];
+    for (const [fileName, obj] of entries) {
+      out.push([fileName, obj?.lastAccessedAt ?? 0, obj?.inodeModifiedAt ?? null]);
+    }
+    return out;
+  }
+  // assume array of tuples or objects
+  return Array.from(entries, (e) => {
+    if (Array.isArray(e)) {
+      return [e[0], e[1] ?? 0, e[2] ?? null];
+    }
+    if (e && typeof e === 'object') {
+      return [e.fileName, e.lastAccessedAt ?? 0, e.inodeModifiedAt ?? null];
+    }
+    return [String(e), 0, null];
+  });
+}
+
+
+module.exports = { isSubsequence, getDirPath, getExtensionFromFilePath, isExcluded, prioritizeCurrentFileExt, resetInterval, getSetFromListFunction, normalizeEntries};
+
+
 
 

@@ -1,5 +1,5 @@
 require('../../utils/logger');
-const { EXTRACT_FILE_NAMES, WRITE_CACHE_TO_FILE, INODE_MODIFIED_AT, FLUSH_LAST_ACCESS } = require('../../config/constants');
+const { EXTRACT_FILE_NAMES, WRITE_CACHE_TO_FILE, INODE_MODIFIED_AT, FLUSH_LAST_ACCESS, DELETE_ALL_CACHE } = require('../../config/constants');
 
 class WorkerBus {
     constructor(messageSource, sender) {
@@ -20,22 +20,13 @@ class WorkerBus {
             if (set) {for (const fn of set) {fn(message);}}
         });
     }
-
-
+ 
     extractFileNames(payload, priority = 'low') {
         this.sender.postMessage({ type: EXTRACT_FILE_NAMES, priority, payload });
     }
 
-    writeCacheToFile(payload, priority = 'low') {
-        this.sender.postMessage({ type: WRITE_CACHE_TO_FILE, priority, payload });
-    }
-
     setInodeModifiedAt(data, priority = 'low') {
         this.sender.postMessage({ type: INODE_MODIFIED_AT, priority, payload: { map: data } });
-    }
-
-    flushLastAccess(payload, priority = 'low') {
-        this.sender.postMessage({ type: FLUSH_LAST_ACCESS, priority, payload });
     }
 }
 

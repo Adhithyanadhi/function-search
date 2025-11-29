@@ -1,12 +1,13 @@
 const vscode = require('vscode');
 const { BaseService } = require('./core/baseService');
-const { getDirPath, getExtensionFromFilePath, prioritizeCurrentFileExt } = require("../utils/common");
+const { getDirPath, getExtensionFromFilePath, prioritizeCurrentFileExt, resetInterval } = require("../utils/common");
 const { initializeEnvironment, getDBDir, getWorkspacePath } = require("../utils/vscode");
 const { watchForChanges } = require("./watcher");
 const { WorkerManager } = require('./workerManager');
+const { Worker } = require('worker_threads');
 const { WorkerBus } = require('./messaging/bus');
 const { FETCHED_FUNCTIONS } = require('../config/constants');
-const { ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY, SNAPSHOT_TO_DISK_INTERVAL, supportedExtensions, FILE_EXTRACT_FILE_PATH, MILLISECONDS_PER_DAY } = require('../config/constants');
+const {   WRITE_CACHE_TO_FILE, FLUSH_LAST_ACCESS, DELETE_ALL_CACHE, DISK_WORKER_FILE_PATH, ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY, SNAPSHOT_TO_DISK_INTERVAL, supportedExtensions, FILE_EXTRACT_FILE_PATH, MILLISECONDS_PER_DAY } = require('../config/constants');
 const { configLoader } = require('../config/configLoader');
 const logger = require('../utils/logger');
 
@@ -32,12 +33,13 @@ class IndexerService extends BaseService {
         this.functionIndex = null;
         this.lastAccessIndex = null;
         this.fileWorker = undefined;
+        this.diskWorker = undefined;
         this.workspacePath = undefined;
         this.currentFileExtension = "";
         this.cachedFunctionList = [];
         this.fileToRangeMap = new Map();
         this.debounceChangeActiveDoc = null;
-        this.intervalHandle = null;
+        this.flushToDBIntervalHandle = null;
         this.iconResolver = undefined;
         this.dbRepo = null;
         this.cacheWriter = null;
@@ -65,7 +67,7 @@ class IndexerService extends BaseService {
         await initializeEnvironment(context, workspacePath);
         const dataFromDisk = await this.loadFromDiskOnStartup();
         this.functionIndex.merge(dataFromDisk.functionIndex);
-        this.globalFunctionNames = await this.getAllFunctionNames();
+        this.globalFunctionNames = await this.dbRepo.getAllFunctionNames();
         this.rebuildCachedFunctionList();
         logger.debug('[Indexer] Cached function list size after rebuild:', this.cachedFunctionList.length);
         if (vscode.window.activeTextEditor) {
@@ -78,6 +80,8 @@ class IndexerService extends BaseService {
 
     initWorkers() {
         this.fileWorker = new WorkerManager(FILE_EXTRACT_FILE_PATH, this.functionIndex);
+        this.diskWorker = new Worker(DISK_WORKER_FILE_PATH);
+        
         this.bus = new WorkerBus(this.fileWorker.worker, this.fileWorker);
         this.bus.bind();
         this.bus.on(FETCHED_FUNCTIONS, (m) => {
@@ -116,13 +120,13 @@ class IndexerService extends BaseService {
 
     startSnapshotTimer() {
         const interval =  SNAPSHOT_TO_DISK_INTERVAL;
-        this.intervalHandle = setInterval(async () => {
+        this.flushToDBIntervalHandle = setInterval(async () => {
             try {
-                this.bus.writeCacheToFile({dbPath: getDBDir(), data: this.functionIndex.getNewData()});
+                this.writeCacheToFile();
                 this.functionIndex.clearNewBuffer();
             } catch {}
             try {
-                this.bus.flushLastAccess({dbPath: getDBDir(), data: this.lastAccessIndex.getNewData()});
+                this.flushLastAccess();
             } catch {}
         }, interval);
     }
@@ -135,7 +139,7 @@ class IndexerService extends BaseService {
             const days = Number(process.env.FUNCTION_SEARCH_TIME_WINDOW_DAYS);
             const windowStartMs = Date.now() - (days * MILLISECONDS_PER_DAY);
             const base = getDBDir();
-            const data = await this.loadStartupCache(base, windowStartMs);
+            const data = await this.dbRepo.loadStartupCache(base, windowStartMs);
             inodeModifiedAt = data.inodeModifiedAt;
             this.functionIndex.merge(data.functionIndex);
             logger.debug('[Indexer] Loaded from DB:', {
@@ -146,73 +150,6 @@ class IndexerService extends BaseService {
             logger.error("Failed to load DB caches:", err);
         }
         return { inodeModifiedAt, functionIndex: this.functionIndex };
-    }
-
-    /**
-     * Load startup cache from database
-     */
-    async loadStartupCache(baseDir, windowStartMs) {
-        const inodeModifiedAt = new Map();
-        const functionIndex = new Map();
-        try {
-            const handle = this.dbRepo.db;
-            const inodeRows = handle.prepare('SELECT fileName, inodeModifiedAt FROM file_cache').all();
-            for (const r of inodeRows) {
-                if (r.inodeModifiedAt != null) {inodeModifiedAt.set(r.fileName, r.inodeModifiedAt);}
-            }
-            const hotFilePaths = await this.getRecentFilePaths(baseDir, windowStartMs);
-            for (const filePath of hotFilePaths) {
-                const arr = await this.getFunctionsForFile(baseDir, filePath);
-                if (arr.length > 0) {functionIndex.set(filePath, arr);}
-            }
-        } catch (e) {
-            logger.error('[Indexer] loadStartupCache failed:', e);
-        }
-        return { inodeModifiedAt, functionIndex };
-    }
-
-    /**
-     * Get recent file paths from database
-     */
-    async getRecentFilePaths(baseDir, windowStartMs) {
-        const handle = this.dbRepo.db;
-        try {
-            const rows = handle.prepare('SELECT fileName FROM file_cache WHERE lastAccessedAt IS NOT NULL AND lastAccessedAt >= ?').all(windowStartMs);
-            return rows.map(r => r.fileName);
-        } catch (e) {
-            logger.error('[Indexer] getRecentFilePaths failed:', e);
-            return [];
-        }
-    }
-
-    /**
-     * Get functions for a specific file
-     */
-    async getFunctionsForFile(baseDir, filePath) {
-        const handle = this.dbRepo.db;
-        try {
-            const row = handle.prepare('SELECT functions FROM file_functions WHERE fileName = ?').get(filePath);
-            if (!row || !row.functions) {return [];}
-            const arr = JSON.parse(row.functions);
-            return Array.isArray(arr) ? arr : [];
-        } catch (e) {
-            logger.error('[Indexer] getFunctionsForFile failed:', e);
-            return [];
-        }
-    }
-
-    /**
-     * Get all function names from database
-     */
-    async getAllFunctionNames() {
-        const handle = this.dbRepo.db;
-        try {
-            const rows = handle.prepare('SELECT functionName FROM function_names').all();
-            return rows.map(r => r.functionName);
-        } catch (e) {
-            logger.error('[Indexer] getAllFunctionNames failed:', e);
-            return [];
-        }
     }
 
     /**
@@ -295,6 +232,20 @@ class IndexerService extends BaseService {
     }
 
 
+    deleteAllCache() {
+        this.diskWorker.postMessage({ type: DELETE_ALL_CACHE, payload: {dbPath: getDBDir()} });
+    }
+
+    writeCacheToFile() {
+        this.diskWorker.postMessage({ type: WRITE_CACHE_TO_FILE, payload: {dbPath: getDBDir(), data: this.functionIndex.getNewData()} });
+    }
+
+
+    flushLastAccess() {
+        this.diskWorker.postMessage({ type: FLUSH_LAST_ACCESS, payload: {dbPath: getDBDir(), data: this.lastAccessIndex.getNewData()} });
+    }
+
+
     async activate(context) {
         const ok = await this.initializeCore(context);
         if (!ok) {return;}
@@ -307,14 +258,13 @@ class IndexerService extends BaseService {
         this.startSnapshotTimer();
     }
 
+
     dispose() {
-        if (this.intervalHandle) {clearInterval(this.intervalHandle);}        
+        if (this.flushToDBIntervalHandle) {resetInterval(this.flushToDBIntervalHandle);}        
         try { if (this.watcher) {this.watcher.dispose();} } catch {}
         try { 
-            if (this.bus) {
-                this.bus.writeCacheToFile({dbPath: getDBDir(), data: this.functionIndex.getNewData()});
-                this.bus.flushLastAccess({dbPath: getDBDir(), data: this.lastAccessIndex.getNewData()});
-            }
+            this.writeCacheToFile();
+            this.flushLastAccess();
         } catch {}
     }
 }

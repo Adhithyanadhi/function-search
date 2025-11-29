@@ -85,6 +85,9 @@ parentPort.on('message', (message) => {
             logger.error("Worker Error:", error);
             parentBus.postMessage('error', { message: error.message }, 'high');
         }
+    } else{
+		logger.error('[Worker:extractFunctoinName] received invalid message',message);
+
     }
 });
 
