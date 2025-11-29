@@ -23,10 +23,7 @@ class WorkerManager {
             } else if (message.type === FLUSH_LAST_ACCESS) {
                 diskWorker.postMessage({ type: FLUSH_LAST_ACCESS });
             } else {
-                logger.debug(
-                'WorkerManager received message: ' + JSON.stringify(message, null, 2)
-                );
-
+                logger.error('WorkerManager received invalid message of type', message.type );
             }
         });
 

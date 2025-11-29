@@ -4,6 +4,7 @@ const fs = require('fs');
 const logger = require('../../utils/logger');
 const { BaseService } = require('../core/baseService');
 const { configLoader } = require('../../config/configLoader');
+const { getSetFromListFunction, normalizeEntries } = require('../../../src/utils/common')
 
 // WASM SQLite for Node/Electron with a Node-FS VFS (file-backed; no native .node)
 // const { Database } = require('node-sqlite3-wasm');
@@ -128,8 +129,9 @@ class DatabaseRepository extends BaseService {
 
     try {
       writeConn.exec(sql);
+      logger.debug('[DatabaseRepository] createSchema success:');
     } catch (e) {
-      logger.warn('[DatabaseRepository] createSchema failed:', e);
+      logger.error('[DatabaseRepository] createSchema failed:', e);
     }
   }
 
