@@ -197,8 +197,8 @@ class IndexerService extends BaseService {
         this.createDiskWorker();
     }
 
-    diskWorkerhealthcheck() {
-        const timeoutMs = 10000;
+    async diskWorkerhealthcheck() {
+        const timeoutMs = 2000;
         const worker = this.diskWorker; // snapshot
 
         return new Promise((resolve, reject) => {
@@ -222,18 +222,19 @@ class IndexerService extends BaseService {
                 if (msg.response_id !== request_id) return; // not our PONG
 
                 clearTimeout(timer);
-                console.log("timer cleared");
                 worker.off('message', onMessage);
                 resolve(msg);
             };
 
-            const timer = setTimeout(() => {
+            const timer = setTimeout(async () => {
                 worker.off('message', onMessage);
-                reject(new Error(`DiskWorker heartbeat timeout (request_id=${request_id})`));
 
-                this.restartDiskWorker().catch((err) => {
+                const restartPromise = this.restartDiskWorker();
+                restartPromise.catch((err) => {
                     logger.error('[Indexer] Failed to restart DiskWorker', err);
                 });
+                await restartPromise;      
+                resolve(`New DiskWorker created after timeout (request_id=${request_id})`);
             }, timeoutMs);
 
             worker.on('message', onMessage);
