@@ -124,6 +124,14 @@ class DualBufferManager extends BaseService {
         return this.primaryBuffer.values();
     }
 
+    toMap() {
+        const out = new Map(this.primaryBuffer);
+        for (const [key, value] of this.newBuffer.entries()) {
+            out.set(key, value);
+        }
+        return out;
+    }
+
     /**
      * Get size of primary buffer
      */
