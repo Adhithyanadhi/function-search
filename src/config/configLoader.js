@@ -59,7 +59,6 @@ class ConfigLoader {
                 }
             }
 
-            console.log(`[ConfigLoader] Loaded ${Object.keys(this.config).length} configuration values`);
         } catch (error) {
             console.error('[ConfigLoader] Error loading .env file:', error);
             this.loadDefaults();
@@ -87,7 +86,6 @@ class ConfigLoader {
             LOGGER_CONTEXT: 'FunctionSearch',
             FILESYSTEM_CACHE_ENABLED: true
         };
-        console.log('[ConfigLoader] Using default configuration');
     }
 
     /**

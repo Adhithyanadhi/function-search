@@ -4,7 +4,7 @@ const fs = require('fs');
 const logger = require('../../utils/logger');
 const { BaseService } = require('../core/baseService');
 const { configLoader } = require('../../config/configLoader');
-const { getSetFromListFunction, normalizeEntries } = require('../../../src/utils/common')
+const { getSetFromListFunction } = require('../../../src/utils/common')
 
 // WASM SQLite for Node/Electron with a Node-FS VFS (file-backed; no native .node)
 // const { Database } = require('node-sqlite3-wasm');
@@ -365,16 +365,15 @@ class DatabaseRepository extends BaseService {
   }
 
 
-  async lastaccessCachewrite(entries) {
-    const upsert = this.repository.getPreparedStatement(
-      'INSERT INTO file_cache (fileName, lastAccessedAt, inodeModifiedAt) VALUES (?, ?, ?) ' +
+  async lastaccessCachewrite(data) {
+    const upsert = this.getPreparedStatement(
+      'INSERT INTO file_cache (fileName, lastAccessedAt) VALUES (?, ?) ' +
       'ON CONFLICT(fileName) DO UPDATE SET ' +
-      '  lastAccessedAt = MAX(file_cache.lastAccessedAt, excluded.lastAccessedAt), ' +
-      '  inodeModifiedAt = excluded.inodeModifiedAt'
+      '  lastAccessedAt = MAX(file_cache.lastAccessedAt, excluded.lastAccessedAt), ' 
     );
 
-    const tx = this.repository.transaction(async (normalized) => {
-      for (const [fileName, lastAccessedAt, inodeModifiedAt] of normalized) {
+    const tx = this.transaction(async (data) => {
+      for (const [fileName, lastAccessedAt] of data) {
         const last =  lastAccessedAt ;
         const inode = inodeModifiedAt ;
         await upsert.run(fileName, last, inode);
@@ -382,9 +381,8 @@ class DatabaseRepository extends BaseService {
     });
 
     try {
-      const normalized = normalizeEntries(entries);
-      await tx(normalized);
-      logger.debug(`[lastAccess] Wrote ${normalized.length} entries`);
+      await tx(data);
+      logger.debug(`[lastAccess] Wrote ${data.length} entries`);
     } catch (e) {
       logger.error('[lastAccess] Failed to write:', e);
       throw e;
