@@ -369,14 +369,14 @@ class DatabaseRepository extends BaseService {
     const upsert = this.getPreparedStatement(
       'INSERT INTO file_cache (fileName, lastAccessedAt) VALUES (?, ?) ' +
       'ON CONFLICT(fileName) DO UPDATE SET ' +
-      '  lastAccessedAt = MAX(file_cache.lastAccessedAt, excluded.lastAccessedAt), ' 
+      '  lastAccessedAt = MAX(COALESCE(file_cache.lastAccessedAt, 0), excluded.lastAccessedAt) ' 
     );
 
     const tx = this.transaction(async (data) => {
-      for (const [fileName, lastAccessedAt] of data) {
-        const last =  lastAccessedAt ;
-        const inode = inodeModifiedAt ;
-        await upsert.run(fileName, last, inode);
+      for (const row of data) {
+        console.log(row);
+        await upsert.run(row);
+        console.log(this.db.get("select * from file_cache limit 1"));
       }
     });
 
@@ -457,7 +457,7 @@ class DatabaseRepository extends BaseService {
       logger.error('[functionIndex] Failed to write:', e);
       throw e;
     }
-  }
+  } 
 }
 
 module.exports = { DatabaseRepository };
