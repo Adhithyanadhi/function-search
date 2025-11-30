@@ -281,7 +281,10 @@ class DatabaseRepository extends BaseService {
     return true;
   }
 
-  getSelectByFilePathsStmt(filePaths) {
+  async getSelectByFilePath(filePaths) {
+    if (!filePaths || filePaths.length === 0) {
+      return [];
+    }
     const placeholders = filePaths.map(_ => '?').join(',');
     const sql = `
       SELECT fc.fileName, fc.inodeModifiedAt, fc.lastAccessedAt, ff.functions
@@ -289,7 +292,12 @@ class DatabaseRepository extends BaseService {
       LEFT JOIN file_functions ff ON ff.fileName = fc.fileName
       WHERE fc.fileName IN (${placeholders})
     `;
-    return this.db.prepare(sql);
+    return await this.db.all(sql, filePaths);
+  }
+
+  async getFileCache() {
+    if (!this.db) throw new Error('Database not open');
+    return this.db.all('SELECT fileName, inodeModifiedAt, lastAccessedAt FROM file_cache');
   }
 
   /**
@@ -302,12 +310,14 @@ class DatabaseRepository extends BaseService {
           const base = baseDir || path.dirname(this.dbPath);
           if (!this.db) this.ensureOpen(base, true);
 
-          const filePaths = await this.getRecentFilePaths(base, windowStartMs);
-          const stmt = this.getSelectByFilePathsStmt(filePaths);
+          const fileCacheRows = await this.getFileCache();
+          for (const row of fileCacheRows) {
+              inodeModifiedAt.set(row.fileName, row.inodeModifiedAt);
+          }
 
-          const rows = stmt.all(...filePaths);
+          const filePaths = await this.getRecentFilePaths(base, windowStartMs);
+          const rows = await this.getSelectByFilePath(filePaths);
           for (const r of rows) {
-              inodeModifiedAt.set(r.fileName, r.inodeModifiedAt);
               if (r.functions) {
                   try {
                       functionIndex.set(r.fileName, JSON.parse(r.functions));

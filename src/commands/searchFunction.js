@@ -119,9 +119,8 @@ class SearchFunctionCommand extends BaseCommand {
         const chunkSize = 200;
         for (let i = 0; i < filePaths.length; i += chunkSize) {
             const chunk = filePaths.slice(i, i + chunkSize);
-            const stmt = this.indexerService.dbRepo.getSelectByFilePathsStmt(chunk.length);
             try {
-                const rows = stmt.all(...chunk);
+                const rows = this.indexerService.dbRepo.getSelectByFilePathsStmt(chunk);
                 out.push(...rows);
             } catch (e) {
                 logger.error('[SearchFunctionCommand] fetchFunctionBlobsForFiles failed:', e);

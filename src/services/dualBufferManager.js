@@ -42,10 +42,12 @@ class DualBufferManager extends BaseService {
     /**
      * Set value in both buffers
      */
-    set(key, value) {
+    set(key, value, onlyPrimay=false) {
         this.primaryBuffer.set(key, value);
-        this.newBuffer.set(key, value);
-        this.dirty = true;
+        if(!onlyPrimay){
+            this.newBuffer.set(key, value);
+            this.dirty = true;
+        }
         
         // Check if we need to trim the buffer
         this.checkAndTrim();
@@ -177,6 +179,15 @@ class DualBufferManager extends BaseService {
     merge(data) {
         for (const [key, value] of data.entries()) {
             this.set(key, value);
+        }
+    }
+
+    /**
+     * load external data into primary buffers
+     */
+    load(data) {
+        for (const [key, value] of data.entries()) {
+            this.set(key, value, true);
         }
     }
 

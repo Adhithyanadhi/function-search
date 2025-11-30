@@ -65,8 +65,7 @@ class IndexerService extends BaseService {
         this.workspacePath = workspacePath;
         logger.debug('[Indexer] Activation with workspacePath:', this.workspacePath);
         await initializeEnvironment(context, workspacePath);
-        const dataFromDisk = await this.loadFromDiskOnStartup();
-        this.functionIndex.merge(dataFromDisk.functionIndex);
+        await this.loadFromDiskOnStartup();
         this.globalFunctionNames = await this.dbRepo.getAllFunctionNames();
         this.rebuildCachedFunctionList();
         logger.debug('[Indexer] Cached function list size after rebuild:', this.cachedFunctionList.length);
@@ -74,7 +73,6 @@ class IndexerService extends BaseService {
             const fileName = vscode.window.activeTextEditor.document.fileName;
             this.setCurrentFileExtension(getExtensionFromFilePath(fileName));
         }
-        this.inodeModifiedAt.merge(dataFromDisk.inodeModifiedAt);
         return true;
     }
 
@@ -101,7 +99,7 @@ class IndexerService extends BaseService {
             }
         });
 
-        this.bus.setInodeModifiedAt(this.inodeModifiedAt.toMap());
+        this.bus.setInodeModifiedAt(this.inodeModifiedAt.toMap(), 'high');
         logger.debug('[Indexer] Trigger initial extractFileNames for workspace');
         this.bus.extractFileNames({ workspacePath: this.workspacePath, filePath: this.workspacePath, extension: "__all__", initialLoad: true }, 'low');
     }
@@ -132,7 +130,6 @@ class IndexerService extends BaseService {
         this.flushToDBIntervalHandle = setInterval(async () => {
             try {
                 this.writeCacheToDB();
-                this.functionIndex.clearNewBuffer();
             } catch {}
         }, interval);
     }
@@ -140,22 +137,17 @@ class IndexerService extends BaseService {
 
 
     async loadFromDiskOnStartup() {
-        let inodeModifiedAt = new Map();
         try {
             const days = Number(process.env.FUNCTION_SEARCH_TIME_WINDOW_DAYS);
             const windowStartMs = Date.now() - (days * MILLISECONDS_PER_DAY);
             const base = getDBDir();
             const data = await this.dbRepo.loadStartupCache(base, windowStartMs);
-            inodeModifiedAt = data.inodeModifiedAt;
-            this.functionIndex.merge(data.functionIndex);
-            logger.debug('[Indexer] Loaded from DB:', {
-                inodeCount: inodeModifiedAt.size,
-                functionIndexFiles: this.functionIndex.size
-            });
+            this.functionIndex.load(data.functionIndex);
+            this.inodeModifiedAt.load(data.inodeModifiedAt);
+            logger.info('[Indexer] Loaded from DB:', this.inodeModifiedAt.size,    this.functionIndex.size);
         } catch (err) {
             logger.error("Failed to load DB caches:", err);
         }
-        return { inodeModifiedAt, functionIndex: this.functionIndex };
     }
 
     /**
@@ -326,6 +318,9 @@ class IndexerService extends BaseService {
                 inodeModifiedAt: this.inodeModifiedAt.getNewData()
             }
         });
+        this.functionIndex.clearNewBuffer();
+        this.inodeModifiedAt.clearNewBuffer();
+        this.lastAccessIndex.clearNewBuffer();
     }
 
     deleteAllCache() {

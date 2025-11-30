@@ -105,15 +105,15 @@ function preprocessFiles(absoluteFilePath, extension) {
 			const lastSeen = inodeModifiedAt.get(fullPath) || 0;
 
 
+			if (stat.mtimeMs <= lastSeen) {
+				return;
+			}
 			if (stat.isDirectory()) {
 				updateInodeModifiedAt(fullPath, stat.mtimeMs);
 				fs.readdirSync(fullPath).forEach(entry => {
 					readDirRecursive(path.join(fullPath, entry));
 				});
 			} else {
-				if (stat.mtimeMs <= lastSeen) {
-					return;
-				}
 				updateInodeModifiedAt(fullPath, stat.mtimeMs);
 				handleFiles(fullPath);
 			}
