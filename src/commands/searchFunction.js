@@ -22,7 +22,6 @@ class SearchFunctionCommand extends BaseCommand {
         this.iconResolver = this.container.get('iconResolverService');
         // Get indexer service from container
         this.indexerService = this.container.get('indexerService');
-        this.dbRepo = this.container.get('databaseRepository');
     }
 
     register(context) {
@@ -107,11 +106,10 @@ class SearchFunctionCommand extends BaseCommand {
         if (names.length === 0) {return [];}
         const capped = names.slice(0, limit);
 
-        const candidateFilePaths = await this.dbRepo.getCandidateFilePathsForFallback(capped, windowStartMs, limit);
+        const candidateFilePaths = await this.indexerService.dbRepo.getCandidateFilePathsForFallback(capped, windowStartMs, limit);
         if (candidateFilePaths.length === 0) {return [];}
         return await this.fetchFunctionBlobsForFiles(candidateFilePaths, limit);
     }
-
 
     /**
      * Fetch function blobs for files
@@ -121,7 +119,7 @@ class SearchFunctionCommand extends BaseCommand {
         const chunkSize = 200;
         for (let i = 0; i < filePaths.length; i += chunkSize) {
             const chunk = filePaths.slice(i, i + chunkSize);
-            const stmt = this.dbRepo.getSelectByFilePathsStmt(chunk.length);
+            const stmt = this.indexerService.dbRepo.getSelectByFilePathsStmt(chunk.length);
             try {
                 const rows = stmt.all(...chunk);
                 out.push(...rows);
