@@ -6,7 +6,7 @@ const { watchForChanges } = require("./watcher");
 const { WorkerManager } = require('./workerManager');
 const { Worker } = require('worker_threads');
 const { WorkerBus } = require('./messaging/bus');
-const { FETCHED_FUNCTIONS } = require('../config/constants');
+const { FETCHED_FUNCTIONS, INODE_MODIFIED_AT } = require('../config/constants');
 const {   WRITE_CACHE_TO_FILE, DELETE_ALL_CACHE, DISK_WORKER_FILE_PATH, ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY, SNAPSHOT_TO_DISK_INTERVAL, supportedExtensions, FILE_EXTRACT_FILE_PATH, MILLISECONDS_PER_DAY } = require('../config/constants');
 const { configLoader } = require('../config/configLoader');
 const logger = require('../utils/logger');
@@ -32,6 +32,7 @@ class IndexerService extends BaseService {
         super(container);
         this.functionIndex = null;
         this.lastAccessIndex = null;
+        this.inodeModifiedAt = null;
         this.fileWorker = undefined;
         this.diskWorker = undefined;
         this.workspacePath = undefined;
@@ -52,6 +53,7 @@ class IndexerService extends BaseService {
         this.dbRepo = this.container.get('databaseRepository');
         this.functionIndex = this.container.get('functionIndexBuffer');
         this.lastAccessIndex = this.container.get('lastAccessBuffer');
+        this.inodeModifiedAt = this.container.get('inodeModifiedBuffer');
         this.iconResolver = this.container.get('iconResolverService');
         
         logger.debug('[IndexerService] Initialized');
@@ -72,7 +74,7 @@ class IndexerService extends BaseService {
             const fileName = vscode.window.activeTextEditor.document.fileName;
             this.setCurrentFileExtension(getExtensionFromFilePath(fileName));
         }
-        this.initialInodeMap = dataFromDisk.inodeModifiedAt;
+        this.inodeModifiedAt.merge(dataFromDisk.inodeModifiedAt);
         return true;
     }
 
@@ -90,7 +92,16 @@ class IndexerService extends BaseService {
                 this.updateCacheHandler(p.filePath);
             }
         });
-        this.bus.setInodeModifiedAt(this.initialInodeMap || new Map());
+
+        this.bus.on(INODE_MODIFIED_AT, (m) => {
+            const p = m.payload || {};
+            logger.debug('[Indexer] Received inodeModifedAt');
+            for(const [fileName, inodeModifedAt] of p.entries()){
+                this.inodeModifiedAt.set(fileName, inodeModifedAt);
+            }
+        });
+
+        this.bus.setInodeModifiedAt(this.inodeModifiedAt.toMap());
         logger.debug('[Indexer] Trigger initial extractFileNames for workspace');
         this.bus.extractFileNames({ workspacePath: this.workspacePath, filePath: this.workspacePath, extension: "__all__", initialLoad: true }, 'low');
     }
@@ -311,7 +322,8 @@ class IndexerService extends BaseService {
             payload: {
                 dbPath: getDBDir(), 
                 functionIndex: this.functionIndex.getNewData(), 
-                lastAccess: this.lastAccessIndex.getNewData()
+                lastAccess: this.lastAccessIndex.getNewData(),
+                inodeModifiedAt: this.inodeModifiedAt.getNewData()
             }
         });
     }

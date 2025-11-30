@@ -12,10 +12,12 @@ const parentBus = createParentBus(parentPort);
 const childBus = createChildBus(functionWorker);
 
 let inodeModifiedAt = new Map();
+let inodeModifiedAtUpdates = new Map();
 const highPriorityFileQueue = [];
 const lowPriorityFileQueue = [];
 let idle = true;
 const debounceMap = new Map();
+let updateInodeModifiedAtTimer = null;
 let ingress = 0;
 
 async function processFiles() {
@@ -42,6 +44,20 @@ async function processFiles() {
 	}
 
 	idle = true;
+}
+
+function updateInodeModifiedAt(fullPath, at){
+	inodeModifiedAt.set(fullPath, at);
+	inodeModifiedAtUpdates.set(fullPath, at);
+	if(updateInodeModifiedAtTimer){
+		clearTimeout(updateInodeModifiedAtTimer);
+	}
+	updateInodeModifiedAtTimer = setTimeout(() => {
+		const payload = new Map(inodeModifiedAtUpdates);
+		parentBus.postMessage(INODE_MODIFIED_AT, payload);
+		inodeModifiedAtUpdates.clear();
+		updateInodeModifiedAtTimer = null;
+	}, 5000);
 }
 
 async function extractFileNames(task) {
@@ -90,7 +106,7 @@ function preprocessFiles(absoluteFilePath, extension) {
 
 
 			if (stat.isDirectory()) {
-				inodeModifiedAt.set(fullPath, stat.mtimeMs);
+				updateInodeModifiedAt(fullPath, stat.mtimeMs);
 				fs.readdirSync(fullPath).forEach(entry => {
 					readDirRecursive(path.join(fullPath, entry));
 				});
@@ -98,7 +114,7 @@ function preprocessFiles(absoluteFilePath, extension) {
 				if (stat.mtimeMs <= lastSeen) {
 					return;
 				}
-				inodeModifiedAt.set(fullPath, stat.mtimeMs);
+				updateInodeModifiedAt(fullPath, stat.mtimeMs);
 				handleFiles(fullPath);
 			}
         } catch (err) {

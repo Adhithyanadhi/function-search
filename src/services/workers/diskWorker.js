@@ -56,7 +56,7 @@ function enqueueWrite(message) {
                 return;
             }
 
-            const { dbPath, functionIndex, lastAccess } = payload;
+            const { dbPath, functionIndex, lastAccess, inodeModifiedAt } = payload;
 
             if (!dbPath) {
                 logger.error('[DiskWorker] Missing dbPath in write payload', data);
@@ -71,6 +71,7 @@ function enqueueWrite(message) {
                     case WRITE_CACHE_TO_FILE:
                         await dbRepo.functionCachewrite(functionIndex);
                         await dbRepo.lastaccessCachewrite(lastAccess);
+                        await dbRepo.inodeModifiedAtCachewrite(inodeModifiedAt);
                         break;
 
                     case DELETE_ALL_CACHE:

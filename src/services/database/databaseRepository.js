@@ -387,6 +387,28 @@ class DatabaseRepository extends BaseService {
   }
 
 
+  async inodeModifiedAtCachewrite(data) {
+    const upsert =  "INSERT INTO file_cache (fileName, inodeModifiedAt) VALUES (?, ?) " +
+      "ON CONFLICT(fileName) DO UPDATE SET " +
+      "  inodeModifiedAt = MAX(COALESCE(file_cache.inodeModifiedAt, 0), excluded.inodeModifiedAt) " 
+    ;
+
+    const tx = this.transaction(async (data) => {
+      for (const row of data) {
+        await this.db.run(upsert, row);
+      }
+    });
+
+    try {
+      await tx(data);
+      logger.debug(`[inodeModifiedAt] Wrote ${data.length} entries`);
+    } catch (e) {
+      logger.error('[inodeModifiedAt] Failed to write:', e);
+      throw e;
+    }
+  }
+
+
   async functionCachewrite(newData) {
     this.createSchema();
     // Normalize input to Map
