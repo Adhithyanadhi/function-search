@@ -25,6 +25,7 @@ class DatabaseRepository extends BaseService {
   constructor(container) {
     super(container);
     this.db = null;
+    this.baseDir = null;
     this.dbPath = null;
     this.prepared = new Map(); // sql -> wrapped stmt
     this.readOnly = false;
@@ -50,6 +51,7 @@ class DatabaseRepository extends BaseService {
    * @returns {import('node-sqlite3-wasm').Database}
    */
   ensureOpen(baseDir, readOnly) {
+    this.baseDir = baseDir;
     logger.debug('[DatabaseRepository] is readOnly', readOnly, baseDir);
     if (this.db) return this.db;
 
@@ -238,7 +240,6 @@ class DatabaseRepository extends BaseService {
    * Get candidate file paths for fallback search
    */
   async getCandidateFilePathsForFallback(names, windowStartMs, limit) {
-    console.log("called getCandidateFilePathsForFallback");
     const inPlaceholders = names.map(() => '?').join(',');
     const candidateFilePathsQuery = `
         SELECT DISTINCT fo.fileName AS filePath
@@ -257,16 +258,21 @@ class DatabaseRepository extends BaseService {
     }
   }
 
+
+  deleteDBFile(){ 
+    try { 
+      fs.unlinkSync(this.dbPath); 
+    } catch(e) {
+      logger.info("error while deleteDBFILE ", e)
+    }
+  }
+
   deleteAllCache(){
     logger.info("deleteAllCache is called with ", this.readOnly)
     try{
-      const rows = this.db.all('PRAGMA database_list');
-      console.log("database list is", rows);
-
-      this.db.prepare(`delete from file_cache`).run();
-      this.db.prepare(`delete from function_names`).run();
-      this.db.prepare(`delete from file_functions`).run();
-      this.db.prepare(`delete from function_occurrences`).run();
+      this.deleteDBFile();
+      this.db = null;
+      this.ensureOpen(this.baseDir, this.readOnly);
       logger.info('[DatabaseRepository] deleteAllCache success:');
     } catch(e){
         logger.error('[DatabaseRepository] deleteAllCache failed:', e);
@@ -369,8 +375,8 @@ class DatabaseRepository extends BaseService {
 
     const tx = this.repository.transaction(async (normalized) => {
       for (const [fileName, lastAccessedAt, inodeModifiedAt] of normalized) {
-        const last = typeof lastAccessedAt === 'number' ? lastAccessedAt : 0;
-        const inode = typeof inodeModifiedAt === 'number' ? inodeModifiedAt : null;
+        const last =  lastAccessedAt ;
+        const inode = inodeModifiedAt ;
         await upsert.run(fileName, last, inode);
       }
     });
@@ -378,7 +384,7 @@ class DatabaseRepository extends BaseService {
     try {
       const normalized = normalizeEntries(entries);
       await tx(normalized);
-      logger.debug(`[LastAccessCacheWriter] Wrote ${normalized.length} entries`);
+      logger.debug(`[lastAccess] Wrote ${normalized.length} entries`);
     } catch (e) {
       logger.error('[lastAccess] Failed to write:', e);
       throw e;
