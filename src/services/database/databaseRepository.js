@@ -425,29 +425,38 @@ class DatabaseRepository extends BaseService {
       }
     }
 
-    const tx = this.transaction(async () => {
-      console.log("transaction functionindexcache");
-      for (const fn of allFileNames) {
-        await upsertFileCache.run(fn);
-      }
-      for (const fn of allFunctionNames) {
-        await upsertName.run(fn);
-      }
-      for (const [filePath, functions] of map) {
-        const json = JSON.stringify(functions || []);
-        await upsertFunctions.run(filePath, json);
-      }
-      for (const [fn, filePath] of fileFunctionPairs) {
-        await insertOccurrence.run(fn, filePath);
-      }
-    });
 
     try {
-      logger.debug(`[FunctionIndexCacheWriter] Writing ${map.size} files, ${allFunctionNames.size} unique functions`);
-      await tx();
-      logger.debug(`[FunctionIndexCacheWriter] Wrote ${map.size} files, ${allFunctionNames.size} unique functions`);
+      logger.debug(`[functionIndex] Writing ${map.size} files, ${allFunctionNames.size} unique functions`);
+
+        this.db.exec('BEGIN;');
+        for (const fn of allFileNames) {
+          await upsertFileCache.run(fn);
+        }
+        this.db.exec('COMMIT;');
+
+        this.db.exec('BEGIN;');
+        for (const fn of allFunctionNames) {
+          await upsertName.run(fn);
+        }
+        this.db.exec('COMMIT;');
+
+        this.db.exec('BEGIN;');
+        for (const [filePath, functions] of map) {
+          const json = JSON.stringify(functions || []);
+          await upsertFunctions.run(filePath, json);
+        }
+        this.db.exec('COMMIT;');
+
+        this.db.exec('BEGIN;');
+        for (const [fn, filePath] of fileFunctionPairs) {
+          await insertOccurrence.run(fn, filePath);
+        }
+        this.db.exec('COMMIT;');
+
+      logger.debug(`[functionIndex] Wrote ${map.size} files, ${allFunctionNames.size} unique functions`);
     } catch (e) {
-      logger.error('[FunctionIndexCacheWriter] Failed to write:', e);
+      logger.error('[functionIndex] Failed to write:', e);
       throw e;
     }
   }
