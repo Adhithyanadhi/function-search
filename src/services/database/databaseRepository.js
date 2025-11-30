@@ -149,7 +149,7 @@ class DatabaseRepository extends BaseService {
     const wrapped = {
       run: (...args) => {
         try {
-          const info = stmt.run(...args);
+          const info = stmt.run(args);
           return Promise.resolve(info);
         } catch (e) {
           return Promise.reject(e);
@@ -366,17 +366,14 @@ class DatabaseRepository extends BaseService {
 
 
   async lastaccessCachewrite(data) {
-    const upsert = this.getPreparedStatement(
-      'INSERT INTO file_cache (fileName, lastAccessedAt) VALUES (?, ?) ' +
-      'ON CONFLICT(fileName) DO UPDATE SET ' +
-      '  lastAccessedAt = MAX(COALESCE(file_cache.lastAccessedAt, 0), excluded.lastAccessedAt) ' 
-    );
+    const upsert =  "INSERT INTO file_cache (fileName, lastAccessedAt) VALUES (?, ?) " +
+      "ON CONFLICT(fileName) DO UPDATE SET " +
+      "  lastAccessedAt = MAX(COALESCE(file_cache.lastAccessedAt, 0), excluded.lastAccessedAt) " 
+    ;
 
     const tx = this.transaction(async (data) => {
       for (const row of data) {
-        console.log(row);
-        await upsert.run(row);
-        console.log(this.db.get("select * from file_cache limit 1"));
+        await this.db.run(upsert, row);
       }
     });
 
