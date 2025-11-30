@@ -380,7 +380,7 @@ class DatabaseRepository extends BaseService {
       await tx(normalized);
       logger.debug(`[LastAccessCacheWriter] Wrote ${normalized.length} entries`);
     } catch (e) {
-      logger.error('[LastAccessCacheWriter] Failed to write:', e);
+      logger.error('[lastAccess] Failed to write:', e);
       throw e;
     }
   }

@@ -1,5 +1,5 @@
 require('../../utils/logger');
-const { EXTRACT_FILE_NAMES, WRITE_CACHE_TO_FILE, INODE_MODIFIED_AT, FLUSH_LAST_ACCESS, DELETE_ALL_CACHE } = require('../../config/constants');
+const { EXTRACT_FILE_NAMES, WRITE_CACHE_TO_FILE, INODE_MODIFIED_AT, DELETE_ALL_CACHE } = require('../../config/constants');
 
 class WorkerBus {
     constructor(messageSource, sender) {

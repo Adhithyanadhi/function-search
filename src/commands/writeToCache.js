@@ -35,10 +35,10 @@ class WriteToCacheCommand extends BaseCommand {
                 vscode.window.showErrorMessage("No workspace detected; cannot clear index.");
                 return;
             }
-            this.indexerService.writeCacheToFile();
+            this.indexerService.writeCacheToDB();
         } catch (err) {
-            logger.error("[FunctionSearch] Failed to clear function index:", err);
-            vscode.window.showErrorMessage("Failed to clear function index. See console for details.");
+            logger.error("[FunctionSearch] Failed to write function index:", err);
+            vscode.window.showErrorMessage("Failed to write function index. See console for details.");
         }
     }
 }

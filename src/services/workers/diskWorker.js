@@ -3,25 +3,20 @@
 const { parentPort } = require('worker_threads');
 const { ServiceContainer } = require('../core/serviceContainer');
 const { DatabaseRepository } = require('../database/databaseRepository');
-const { CacheWriterService } = require('../database/cacheWriterService');
-const { WRITE_CACHE_TO_FILE, FLUSH_LAST_ACCESS, DELETE_ALL_CACHE } = require('../../config/constants');
+const { WRITE_CACHE_TO_FILE, DELETE_ALL_CACHE } = require('../../config/constants');
 const logger = require('../../utils/logger');
 
 const container = new ServiceContainer();
 
 let dbRepo = null;
-let cacheWriter = null;
 
 async function initializeServices() {
     try {
         container.register('databaseRepository',() => new DatabaseRepository(container),true);
-        container.register('cacheWriterService', () => new CacheWriterService(container),true);
 
         dbRepo = container.get('databaseRepository');
-        cacheWriter = container.get('cacheWriterService');
 
         await dbRepo.initialize();
-        await cacheWriter.initialize();
 
         logger.debug('[DiskWorker] Services initialized');
     } catch (err) {
@@ -47,7 +42,7 @@ let writeChain = initPromise;
 
 /**
  * Enqueue a write job (functionIndex or lastAccess).
- * type: WRITE_CACHE_TO_FILE | FLUSH_LAST_ACCESS
+ * type: WRITE_CACHE_TO_FILE 
  * payload: { dbPath, data }
  */
 function enqueueWrite(message) {
@@ -56,12 +51,12 @@ function enqueueWrite(message) {
     writeChain = writeChain
         .then(async () => {
             // Guard: services must be ready
-            if (!dbRepo || !cacheWriter) {
+            if (!dbRepo) {
                 logger.error('[DiskWorker] Write requested before services are ready');
                 return;
             }
 
-            const { dbPath, data } = payload;
+            const { dbPath, functionIndex, lastAccess } = payload;
 
             if (!dbPath) {
                 logger.error('[DiskWorker] Missing dbPath in write payload', data);
@@ -74,11 +69,8 @@ function enqueueWrite(message) {
 
                 switch (type) {
                     case WRITE_CACHE_TO_FILE:
-                        await cacheWriter.write('functionIndex', data);
-                        break;
-
-                    case FLUSH_LAST_ACCESS:
-                        await cacheWriter.write('lastAccess', data);
+                        await dbRepo.functionCachewrite(functionIndex);
+                        await dbRepo.lastaccessCachewrite(lastAccess);
                         break;
 
                     case DELETE_ALL_CACHE:

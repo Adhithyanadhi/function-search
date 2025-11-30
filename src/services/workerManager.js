@@ -1,7 +1,7 @@
 const logger = require('../utils/logger');
 const { Worker } = require('worker_threads');
 const { isExcluded } = require("../utils/common")
-const { supportedExtensions, DISK_WORKER_FILE_PATH, DELETE_ALL_CACHE, WRITE_CACHE_TO_FILE, INODE_MODIFIED_AT, FLUSH_LAST_ACCESS } = require('../config/constants');
+const { supportedExtensions, DISK_WORKER_FILE_PATH, DELETE_ALL_CACHE, WRITE_CACHE_TO_FILE, INODE_MODIFIED_AT } = require('../config/constants');
 const diskWorker = new Worker(DISK_WORKER_FILE_PATH);
 
 class WorkerManager {
@@ -20,8 +20,6 @@ class WorkerManager {
                         functionIndex: message.payload?.functionIndex,
                     }
                 });
-            } else if (message.type === FLUSH_LAST_ACCESS) {
-                diskWorker.postMessage({ type: FLUSH_LAST_ACCESS });
             } else {
                 logger.error('WorkerManager received invalid message of type', message.type );
             }
@@ -41,9 +39,6 @@ class WorkerManager {
             return;
         } else if (message.type === WRITE_CACHE_TO_FILE) {
             diskWorker.postMessage({ type: WRITE_CACHE_TO_FILE, payload: message.payload });
-            return;
-        } else if (message.type === FLUSH_LAST_ACCESS) {
-            diskWorker.postMessage({ type: FLUSH_LAST_ACCESS });
             return;
         } else if (message.type === DELETE_ALL_CACHE) {
             diskWorker.postMessage(message);

@@ -1,6 +1,5 @@
 const { ServiceContainer } = require('./serviceContainer');
 const { DatabaseRepository } = require('../database/databaseRepository');
-const { CacheWriterService } = require('../database/cacheWriterService');
 const { CommandManager } = require('../commands/commandManager');
 const { FileSystemService } = require('../utilities/fileSystemService');
 const { IconResolverService } = require('../utilities/iconResolverService');
@@ -26,7 +25,6 @@ class ServiceBootstrap {
 
         // Database services
         this.container.register('databaseRepository', () => new DatabaseRepository(this.container), true);
-        this.container.register('cacheWriterService', () => new CacheWriterService(this.container), true);
 
         // Buffer managers
         this.container.register('lastAccessBuffer', () => new DualBufferManager(this.container, 'LastAccess'), true);
@@ -56,7 +54,6 @@ class ServiceBootstrap {
             'fileSystemService',
             'iconResolverService',
             'databaseRepository',
-            'cacheWriterService',
             'lastAccessBuffer',
             'functionIndexBuffer',
             'commandManager',

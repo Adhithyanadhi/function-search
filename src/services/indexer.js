@@ -7,7 +7,7 @@ const { WorkerManager } = require('./workerManager');
 const { Worker } = require('worker_threads');
 const { WorkerBus } = require('./messaging/bus');
 const { FETCHED_FUNCTIONS } = require('../config/constants');
-const {   WRITE_CACHE_TO_FILE, FLUSH_LAST_ACCESS, DELETE_ALL_CACHE, DISK_WORKER_FILE_PATH, ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY, SNAPSHOT_TO_DISK_INTERVAL, supportedExtensions, FILE_EXTRACT_FILE_PATH, MILLISECONDS_PER_DAY } = require('../config/constants');
+const {   WRITE_CACHE_TO_FILE, DELETE_ALL_CACHE, DISK_WORKER_FILE_PATH, ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY, SNAPSHOT_TO_DISK_INTERVAL, supportedExtensions, FILE_EXTRACT_FILE_PATH, MILLISECONDS_PER_DAY } = require('../config/constants');
 const { configLoader } = require('../config/configLoader');
 const logger = require('../utils/logger');
 
@@ -42,7 +42,6 @@ class IndexerService extends BaseService {
         this.flushToDBIntervalHandle = null;
         this.iconResolver = undefined;
         this.dbRepo = null;
-        this.cacheWriter = null;
     }
 
     /**
@@ -51,7 +50,6 @@ class IndexerService extends BaseService {
     async initialize() {
         await super.initialize();
         this.dbRepo = this.container.get('databaseRepository');
-        this.cacheWriter = this.container.get('cacheWriterService');
         this.functionIndex = this.container.get('functionIndexBuffer');
         this.lastAccessIndex = this.container.get('lastAccessBuffer');
         this.iconResolver = this.container.get('iconResolverService');
@@ -122,11 +120,8 @@ class IndexerService extends BaseService {
         const interval =  SNAPSHOT_TO_DISK_INTERVAL;
         this.flushToDBIntervalHandle = setInterval(async () => {
             try {
-                this.writeCacheToFile();
+                this.writeCacheToDB();
                 this.functionIndex.clearNewBuffer();
-            } catch {}
-            try {
-                this.flushLastAccess();
             } catch {}
         }, interval);
     }
@@ -232,19 +227,20 @@ class IndexerService extends BaseService {
     }
 
 
+    writeCacheToDB() {
+        this.diskWorkerPostMessage({ 
+            type: WRITE_CACHE_TO_FILE, 
+            payload: {
+                dbPath: getDBDir(), 
+                functionIndex: this.functionIndex.getNewData(), 
+                lastAccess: this.lastAccessIndex.getNewData()
+            }
+        });
+    }
+
     deleteAllCache() {
-        this.diskWorker.postMessage({ type: DELETE_ALL_CACHE, payload: {dbPath: getDBDir()} });
+        this.diskWorkerPostMessage({ type: DELETE_ALL_CACHE, payload: {dbPath: getDBDir()} });
     }
-
-    writeCacheToFile() {
-        this.diskWorker.postMessage({ type: WRITE_CACHE_TO_FILE, payload: {dbPath: getDBDir(), data: this.functionIndex.getNewData()} });
-    }
-
-
-    flushLastAccess() {
-        this.diskWorker.postMessage({ type: FLUSH_LAST_ACCESS, payload: {dbPath: getDBDir(), data: this.lastAccessIndex.getNewData()} });
-    }
-
 
     async activate(context) {
         const ok = await this.initializeCore(context);
@@ -263,8 +259,7 @@ class IndexerService extends BaseService {
         if (this.flushToDBIntervalHandle) {resetInterval(this.flushToDBIntervalHandle);}        
         try { if (this.watcher) {this.watcher.dispose();} } catch {}
         try { 
-            this.writeCacheToFile();
-            this.flushLastAccess();
+            this.writeCacheToDB();
         } catch {}
     }
 }
