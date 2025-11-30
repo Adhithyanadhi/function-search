@@ -99,6 +99,9 @@ function enqueueWrite(message) {
 
 // Message handler: just route to the queue, do NOT await writes here
 parentPort.on('message', (message) => {
-if (!message || !message.type) return;
-    enqueueWrite(message);
+    if(message.type == 'PING'){
+        parentPort.postMessage({type: "PONG", response_id: message.request_id});
+    } else {
+        enqueueWrite(message);
+    }
 });

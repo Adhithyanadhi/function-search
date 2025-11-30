@@ -78,7 +78,7 @@ class IndexerService extends BaseService {
 
     initWorkers() {
         this.fileWorker = new WorkerManager(FILE_EXTRACT_FILE_PATH, this.functionIndex);
-        this.diskWorker = new Worker(DISK_WORKER_FILE_PATH);
+        this.createDiskWorker();
         
         this.bus = new WorkerBus(this.fileWorker.worker, this.fileWorker);
         this.bus.bind();
@@ -179,6 +179,83 @@ class IndexerService extends BaseService {
             this.fileToRangeMap.set(currentFile, { start: currentStart, end: this.cachedFunctionList.length });
         }
     }
+
+
+    createDiskWorker(){
+        this.diskWorker = new Worker(DISK_WORKER_FILE_PATH);
+    }
+
+    async restartDiskWorker() {
+        logger.warn('[Indexer] Restarting DiskWorker');
+
+        try {
+            await this.diskWorker.terminate();
+        } catch (err) {
+            logger.error('[Indexer] Error terminating old DiskWorker', err);
+        }
+
+        this.createDiskWorker();
+    }
+
+    diskWorkerhealthcheck() {
+        const timeoutMs = 10000;
+        const worker = this.diskWorker; // snapshot
+
+        return new Promise((resolve, reject) => {
+            // Case 1: worker is null -> wait 2s, then try again
+            if (!worker) {
+                setTimeout(() => {
+                    // after 2s, check again
+                    if (!this.diskWorker) {
+                        return reject(new Error('DiskWorker is null even after wait'));
+                    }
+                    // re-run healthcheck on the new worker
+                    this.diskWorkerhealthcheck().then(resolve).catch(reject);
+                }, timeoutMs);
+                return;
+            }
+
+            const request_id = Date.now(); // current timestamp as request_id
+
+            const onMessage = (msg) => {
+                if (!msg || msg.type !== 'PONG') return;
+                if (msg.response_id !== request_id) return; // not our PONG
+
+                clearTimeout(timer);
+                console.log("timer cleared");
+                worker.off('message', onMessage);
+                resolve(msg);
+            };
+
+            const timer = setTimeout(() => {
+                worker.off('message', onMessage);
+                reject(new Error(`DiskWorker heartbeat timeout (request_id=${request_id})`));
+
+                this.restartDiskWorker().catch((err) => {
+                    logger.error('[Indexer] Failed to restart DiskWorker', err);
+                });
+            }, timeoutMs);
+
+            worker.on('message', onMessage);
+
+            try {
+                worker.postMessage({ type: 'PING', request_id });
+            } catch (err) {
+                clearTimeout(timer);
+                worker.off('message', onMessage);
+                reject(err);
+            }
+        });
+    }
+
+
+    async diskWorkerPostMessage(payload){
+        await this.diskWorkerhealthcheck();
+        this.diskWorker.postMessage(payload);
+    }
+
+
+
 
     prioritizeCurrentFileExtHandler() {
         this.cachedFunctionList = prioritizeCurrentFileExt(this.cachedFunctionList, this.currentFileExtension);
