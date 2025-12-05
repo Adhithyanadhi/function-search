@@ -1,5 +1,5 @@
 require('../../utils/logger');
-const { EXTRACT_FILE_NAMES, WRITE_CACHE_TO_FILE, INODE_MODIFIED_AT, DELETE_ALL_CACHE } = require('../../config/constants');
+const { UPDATE_REGEX_CONFIG, EXTRACT_FILE_NAMES, WRITE_CACHE_TO_FILE, INODE_MODIFIED_AT, DELETE_ALL_CACHE } = require('../../config/constants');
 
 class WorkerBus {
     constructor(messageSource, sender) {
@@ -23,6 +23,10 @@ class WorkerBus {
  
     extractFileNames(payload, priority = 'low') {
         this.sender.postMessage({ type: EXTRACT_FILE_NAMES, priority, payload });
+    }
+ 
+    updateRegexConfig(payload, priority = 'high') {
+        this.sender.postMessage({ type: UPDATE_REGEX_CONFIG, priority, payload });
     }
 
     setInodeModifiedAt(data, priority = 'low') {

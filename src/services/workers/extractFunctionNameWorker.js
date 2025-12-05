@@ -1,16 +1,23 @@
 const logger = require('../../utils/logger');
 const { parentPort } = require('worker_threads');
 const { createParentBus } = require('../../services/messaging/workerBus');
-const { EXTRACT_FUNCTION_NAMES, FETCHED_FUNCTIONS } = require('../../config/constants');
+const { EXTRACT_FUNCTION_NAMES, FETCHED_FUNCTIONS, UPDATE_REGEX_CONFIG } = require('../../config/constants');
 const { FILE_PROPERTIES } = require('../../config/constants');
 const fs = require('fs');
 const path = require('path');
 const highPriorityFileQueue = new Map();
 const lowPriorityFileQueue = new Map();
+
 let idle = true;
+let regex_store = null;
 
 function extractFunctions(filePath, relativeFilePath) {
     const functionList = [];
+    if(!regex_store){
+        logger.error("extractFunctions - regex not initialized");
+        return functionList;
+    }
+
     const fileContent = fs.readFileSync(filePath, 'utf8');
 
     const extension = path.extname(filePath);
@@ -18,23 +25,30 @@ function extractFunctions(filePath, relativeFilePath) {
         return functionList;
     }
 
-    const regex = FILE_PROPERTIES[extension].regex;
+    const regexes = regex_store[extension];
 
-    if (!regex) {return functionList;}
+    if (!regexes || !regexes.length) {
+        return functionList;
+    }
 
-    fileContent.split('\n').forEach((line, index) => {
-        const match = line.match(regex);
-        if (match) {
-            if (match[1] !== undefined) {
-                functionList.push({
-                    name: match[1],
-                    file: filePath,
-                    line: index+1,
-                    relativeFilePath,
-                });
+
+    for (const regex of regexes) {
+        if (!regex) {continue;}
+
+        fileContent.split('\n').forEach((line, index) => {
+            const match = line.match(regex);
+            if (match) {
+                if (match[1] !== undefined) {
+                    functionList.push({
+                        name: match[1],
+                        file: filePath,
+                        line: index+1,
+                        relativeFilePath,
+                    });
+                }
             }
-        }
-    });
+        });
+    }
 
     return functionList;
 }
@@ -64,6 +78,7 @@ async function processFiles() {
         if (!fs.existsSync(filePath)) {continue;}
         const relativeFilePath = path.relative(workspacePath, filePath);
         const functions = await extractFunctions(filePath, relativeFilePath);
+        if(functions.length == 0){ continue;}
         parentBus.postMessage(FETCHED_FUNCTIONS, { filePath, functions }, 'low');
     }
 
@@ -85,9 +100,10 @@ parentPort.on('message', (message) => {
             logger.error("Worker Error:", error);
             parentBus.postMessage('error', { message: error.message }, 'high');
         }
+    } else if(message.type === UPDATE_REGEX_CONFIG){
+        regex_store = message.payload;
     } else{
-		logger.error('[Worker:extractFunctoinName] received invalid message',message);
-
+		logger.error('[Worker:extractFunctoinName] received invalid message',JSON.stringify(message, null, 2));
     }
 });
 

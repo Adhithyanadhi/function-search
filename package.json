@@ -49,6 +49,23 @@
   ],
   "main": "./src/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Function Name Search",
+      "properties": {
+        "function-name-search.regexes": {
+          "type": "object",
+          "default": {},
+          "description": "Custom regex patterns per file extension for Function Name Search. Keys are file extensions like .py or .js, values are arrays of regex strings.",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of regex patterns as strings."
+          }
+        }
+      }
+    },
     "commands": [
       {
         "command": "extension.searchFunction",

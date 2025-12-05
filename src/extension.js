@@ -35,16 +35,16 @@ async function activate(context) {
     }
 
     if (!dbReady) {
-        console.error('[Extension] DB not ready; skipping indexer activation.');
+        console.error('[Extension] DB not ready; skipping indexerService activation.');
         return;
     }
 
-    // Create indexer with service container
-    const indexer = bootstrap.getService('indexerService');
+    // Create indexerService with service container
+    const indexerService = bootstrap.getService('indexerService');
 	try {
-        await indexer.activate(context);
+        await indexerService.activate(context);
 	} catch (err) {
-		console.error('[Extension] Indexer activation failed:', err);
+		console.error('[Extension] IndexerService activation failed:', err);
 	}
 
 	// Register commands using service architecture
@@ -54,10 +54,22 @@ async function activate(context) {
 	commandManager.registerCommand('writeToCache', WriteToCacheCommand);
 	commandManager.registerWithVSCode(context);
 
+
+	const cfgDisposable = vscode.workspace.onDidChangeConfiguration((e) => {
+		if (e.affectsConfiguration('function-name-search.regexes')) {
+			if (!indexerService) return;
+			const config = vscode.workspace.getConfiguration('function-name-search');
+			const userConfig = config.get('regexes') || {};
+			indexerService.updateUserRegexConfig(userConfig);
+		}
+	});
+
+
+	context.subscriptions.push(cfgDisposable);
 	context.subscriptions.push({
 		dispose: async () => {
 			try {
-				await indexer.dispose();
+				await indexerService.dispose();
 			} catch {}
 			try {
 				await bootstrap.dispose();

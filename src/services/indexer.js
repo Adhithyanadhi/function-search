@@ -6,8 +6,11 @@ const { watchForChanges } = require("./watcher");
 const { WorkerManager } = require('./workerManager');
 const { Worker } = require('worker_threads');
 const { WorkerBus } = require('./messaging/bus');
-const { FETCHED_FUNCTIONS, INODE_MODIFIED_AT } = require('../config/constants');
-const {   WRITE_CACHE_TO_FILE, DELETE_ALL_CACHE, DISK_WORKER_FILE_PATH, ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY, SNAPSHOT_TO_DISK_INTERVAL, supportedExtensions, FILE_EXTRACT_FILE_PATH, MILLISECONDS_PER_DAY } = require('../config/constants');
+// src/services/indexerService.js
+const path = require('path');
+
+const {UPDATE_REGEX_CONFIG, FILE_PROPERTIES, FETCHED_FUNCTIONS,INODE_MODIFIED_AT,   WRITE_CACHE_TO_FILE, DELETE_ALL_CACHE, DISK_WORKER_FILE_PATH, ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY, SNAPSHOT_TO_DISK_INTERVAL, supportedExtensions, 
+FILE_EXTRACT_FILE_PATH, MILLISECONDS_PER_DAY } = require('../config/constants');
 const { configLoader } = require('../config/configLoader');
 const logger = require('../utils/logger');
 
@@ -24,6 +27,35 @@ function prepareFunctionProperties(f, file, iconPath, extension) {
         alwaysShow: true,
         extension
     }
+}
+
+
+
+// helper: merge defaults + user regex into a JSON-serializable config
+function buildRegexConfig(userConfig) {
+  const result = {};
+
+  // 1. defaults from FILE_PROPERTIES
+  for (const [ext, props] of Object.entries(FILE_PROPERTIES)) {
+    result[ext] ??= [];
+    result[ext].push(...props.regex);
+  }
+
+  // 2. extensions only in userConfig
+  if (userConfig) {
+    for (const [ext, patterns] of Object.entries(userConfig)) {
+      if (!Array.isArray(patterns)) continue;
+
+      for (const p of patterns) {
+        if (typeof p === 'string' && p.trim()) {
+          result[ext] ??= [];
+          result[ext].push(p);
+        }
+      }
+    }
+  }
+
+  return result;
 }
 
 
@@ -78,9 +110,10 @@ class IndexerService extends BaseService {
 
     initWorkers() {
         this.fileWorker = new WorkerManager(FILE_EXTRACT_FILE_PATH, this.functionIndex);
-        this.createDiskWorker();
-        
         this.bus = new WorkerBus(this.fileWorker.worker, this.fileWorker);
+        this.bus.updateRegexConfig(buildRegexConfig(null));
+
+        this.createDiskWorker();
         this.bus.bind();
         this.bus.on(FETCHED_FUNCTIONS, (m) => {
             const p = m.payload || {};
@@ -123,6 +156,15 @@ class IndexerService extends BaseService {
             this.bus.extractFileNames({ workspacePath: this.workspacePath, source: "onDidOpenfile", filePath, extension }, 'high');
             this.bus.extractFileNames({ workspacePath: this.workspacePath, source: "onDidOpenDir", filePath: getDirPath(filePath), extension }, 'high');
         });
+    }
+
+    /**
+     * Called from extension.js whenever settings change.
+     * @param {Record<string, string[]>} userConfig
+     */
+    updateUserRegexConfig(userConfig) {
+        this.bus.updateRegexConfig(buildRegexConfig(userConfig));
+        this.bus.extractFileNames({ workspacePath: this.workspacePath, filePath: this.workspacePath, extension: "__all__", initialLoad: true }, 'low');
     }
 
     startSnapshotTimer() {

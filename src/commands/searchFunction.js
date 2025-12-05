@@ -20,7 +20,6 @@ class SearchFunctionCommand extends BaseCommand {
      */
     async initialize() {
         this.iconResolver = this.container.get('iconResolverService');
-        // Get indexer service from container
         this.indexerService = this.container.get('indexerService');
     }
 
