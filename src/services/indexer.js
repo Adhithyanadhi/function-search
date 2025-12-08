@@ -9,8 +9,9 @@ const { WorkerBus } = require('./messaging/bus');
 // src/services/indexerService.js
 const path = require('path');
 
-const {UPDATE_REGEX_CONFIG, FILE_PROPERTIES, FETCHED_FUNCTIONS,INODE_MODIFIED_AT,   WRITE_CACHE_TO_FILE, DELETE_ALL_CACHE, DISK_WORKER_FILE_PATH, ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY, SNAPSHOT_TO_DISK_INTERVAL, supportedExtensions, 
-FILE_EXTRACT_FILE_PATH, MILLISECONDS_PER_DAY } = require('../config/constants');
+const {UPDATE_REGEX_CONFIG, UPDATE_IGNORE_CONFIG, FILE_PROPERTIES, FETCHED_FUNCTIONS,INODE_MODIFIED_AT,   WRITE_CACHE_TO_FILE, DELETE_ALL_CACHE, DISK_WORKER_FILE_PATH, ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY, SNAPSHOT_TO_DISK_INTERVAL, supportedExtensions, 
+FILE_EXTRACT_FILE_PATH, MILLISECONDS_PER_DAY, 
+get_invalid_file_path} = require('../config/constants');
 const { configLoader } = require('../config/configLoader');
 const logger = require('../utils/logger');
 
@@ -52,6 +53,24 @@ function buildRegexConfig(userConfig) {
           result[ext].push(p);
         }
       }
+    }
+  }
+
+  return result;
+}
+
+function buildIgnoreConfig(userConfig) {
+  const result = [];
+
+  // 1. defaults from INVALID_FILE_PATH
+  result.push(...get_invalid_file_path());
+
+  // 2. extensions only in userConfig
+  if (userConfig) {
+      for (const p of userConfig) {
+        if (typeof p === 'string' && p.trim()) {
+          result.push(p);
+        }
     }
   }
 
@@ -164,6 +183,11 @@ class IndexerService extends BaseService {
      */
     updateUserRegexConfig(userConfig) {
         this.bus.updateRegexConfig(buildRegexConfig(userConfig));
+        this.bus.extractFileNames({ workspacePath: this.workspacePath, filePath: this.workspacePath, extension: "__all__", initialLoad: true }, 'low');
+    }
+
+    updateUserIgnoreConfig(userConfig) {
+        this.bus.updateIgnoreConfig(buildIgnoreConfig(userConfig));
         this.bus.extractFileNames({ workspacePath: this.workspacePath, filePath: this.workspacePath, extension: "__all__", initialLoad: true }, 'low');
     }
 

@@ -1,7 +1,7 @@
 const logger = require('../../utils/logger');
 const { parentPort } = require('worker_threads');
 const { createParentBus } = require('../../services/messaging/workerBus');
-const { EXTRACT_FUNCTION_NAMES, FETCHED_FUNCTIONS, UPDATE_REGEX_CONFIG } = require('../../config/constants');
+const { EXTRACT_FUNCTION_NAMES, UPDATE_REGEX_CONFIG, FETCHED_FUNCTIONS, UPDATE_IGNORE_CONFIG } = require('../../config/constants');
 const { FILE_PROPERTIES } = require('../../config/constants');
 const fs = require('fs');
 const path = require('path');

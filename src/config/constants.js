@@ -5,8 +5,8 @@ const FILE_EXTRACT_FILE_PATH = path.join(__dirname, '../services/workers/extract
 const DISK_WORKER_FILE_PATH = path.join(__dirname, '../services/workers/diskWorker.js');
 const FUNCTION_EXTRACT_FILE_PATH = path.join(__dirname, '../services/workers/extractFunctionNameWorker.js');
 
-const invalidFilePath = [
-    ".min.js", ".git", '.log', '.tmp', '.bak', '.history/', '/tmp/', '/bin/', '/cache/', '.xml', '.class'
+let INVALID_FILE_PATH = [
+    ".min.js", ".git", '.log', '.tmp', '.bak', '.history/', '/tmp/', '/bin/', '/cache/', '.xml', '.class', '/vendor/'
 ];
 
 const FILE_EDIT_DEBOUNCE_DELAY = 2000;
@@ -79,6 +79,16 @@ const WRITE_CACHE_TO_FILE = 'write-cache-to-file';
 const INODE_MODIFIED_AT = 'inodemodifiedat';
 const DELETE_ALL_CACHE = 'delete-all-cache';
 const UPDATE_REGEX_CONFIG = 'update-regex-config';
+const UPDATE_IGNORE_CONFIG = 'update-ignore-config';
+
+function get_invalid_file_path(){
+    return INVALID_FILE_PATH;
+}
+
+function set_invalid_file_path(x){
+    INVALID_FILE_PATH.push(...x);
+    INVALID_FILE_PATH = [...new Set(INVALID_FILE_PATH)];
+}
 
 module.exports = {
     SNAPSHOT_TO_DISK_INTERVAL,
@@ -91,7 +101,6 @@ module.exports = {
     PROCESS_FILE_TIME_OUT,
     supportedExtensions,
     FILE_EDIT_DEBOUNCE_DELAY,
-    invalidFilePath,
     MAX_INGRES_X_FUNCTION,
     X_FUNCTION_INGRES_TIMEOUT,
     ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY,
@@ -102,7 +111,10 @@ module.exports = {
     WRITE_CACHE_TO_FILE,
     INODE_MODIFIED_AT,
     UPDATE_REGEX_CONFIG,
-    DELETE_ALL_CACHE
+    UPDATE_IGNORE_CONFIG,
+    DELETE_ALL_CACHE,
+    get_invalid_file_path,
+    set_invalid_file_path,
 };
 
 

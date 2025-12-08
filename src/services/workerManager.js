@@ -1,7 +1,7 @@
 const logger = require('../utils/logger');
 const { Worker } = require('worker_threads');
 const { isExcluded } = require("../utils/common")
-const { supportedExtensions, DISK_WORKER_FILE_PATH, DELETE_ALL_CACHE, WRITE_CACHE_TO_FILE, INODE_MODIFIED_AT, EXTRACT_FILE_NAMES, UPDATE_REGEX_CONFIG } = require('../config/constants');
+const { supportedExtensions, DISK_WORKER_FILE_PATH, DELETE_ALL_CACHE, WRITE_CACHE_TO_FILE, INODE_MODIFIED_AT, EXTRACT_FILE_NAMES, UPDATE_REGEX_CONFIG, UPDATE_IGNORE_CONFIG } = require('../config/constants');
 const diskWorker = new Worker(DISK_WORKER_FILE_PATH);
 
 class WorkerManager {
@@ -34,9 +34,7 @@ class WorkerManager {
             diskWorker.postMessage(message);
         } else if (message.type == EXTRACT_FILE_NAMES && p?.initialLoad !== true && (!supportedExtensions.includes(p?.extension) || isExcluded(p?.filePath))) {
             logger.debug('WorkerManager skipping this run', message);
-        } else if (message.type == EXTRACT_FILE_NAMES) {
-            this.worker.postMessage(message);
-        } else if (message.type == UPDATE_REGEX_CONFIG) {
+        } else if (message.type == EXTRACT_FILE_NAMES || message.type == UPDATE_REGEX_CONFIG || message.type == UPDATE_IGNORE_CONFIG) {
             this.worker.postMessage(message);
         } else {
             logger.error(

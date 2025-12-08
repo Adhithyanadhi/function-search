@@ -61,6 +61,11 @@ async function activate(context) {
 			const config = vscode.workspace.getConfiguration('function-name-search');
 			const userConfig = config.get('regexes') || {};
 			indexerService.updateUserRegexConfig(userConfig);
+		} else if (e.affectsConfiguration('function-name-search.ignore')) {
+			if (!indexerService) return;
+			const config = vscode.workspace.getConfiguration('function-name-search');
+			const userConfig = config.get('ignore') || {};
+			indexerService.updateUserIgnoreConfig(userConfig);
 		}
 	});
 

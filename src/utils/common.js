@@ -1,5 +1,4 @@
 require('./logger');
-const { invalidFilePath } = require('../config/constants');
 
 function isSubsequence(sub, target) {
     let i = 0, j = 0;
@@ -34,9 +33,6 @@ function prioritizeCurrentFileExt(functionList, currentFileExtension) {
     return [...sameExt, ...others];
 }
 
-function isExcluded(filePath) {
-    return !filePath || invalidFilePath.some(suffix => filePath.includes(suffix));
-}
 
 function resetInterval(handle){
     clearInterval(handle);
@@ -55,7 +51,7 @@ function getSetFromListFunction(arr) {
 
 
 
-module.exports = { isSubsequence, getDirPath, getExtensionFromFilePath, isExcluded, prioritizeCurrentFileExt, resetInterval, getSetFromListFunction};
+module.exports = { isSubsequence, getDirPath, getExtensionFromFilePath, prioritizeCurrentFileExt, resetInterval, getSetFromListFunction};
 
 
 
