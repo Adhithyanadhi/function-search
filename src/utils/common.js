@@ -1,4 +1,5 @@
 require('./logger');
+const {get_invalid_dir_fragments} = require('../config/constants');
 
 function isSubsequence(sub, target) {
     let i = 0, j = 0;
@@ -50,8 +51,11 @@ function getSetFromListFunction(arr) {
 }
 
 
+function isExcluded(filePath) {
+    return !filePath || get_invalid_dir_fragments().some(suffix => filePath.includes(suffix));
+}
 
-module.exports = { isSubsequence, getDirPath, getExtensionFromFilePath, prioritizeCurrentFileExt, resetInterval, getSetFromListFunction};
+module.exports = { isSubsequence, getDirPath, getExtensionFromFilePath, prioritizeCurrentFileExt, isExcluded, resetInterval, getSetFromListFunction};
 
 
 

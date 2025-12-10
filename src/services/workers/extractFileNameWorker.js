@@ -1,9 +1,10 @@
 const logger = require('../../utils/logger');
 const { getExtensionFromFilePath } = require('../../utils/common')
-const { FUNCTION_EXTRACT_FILE_PATH, supportedExtensions, PROCESS_FILE_TIME_OUT, MAX_INGRES_X_FUNCTION, X_FUNCTION_INGRES_TIMEOUT, get_invalid_file_path, set_invalid_file_path } = require('../../config/constants');
+const { FUNCTION_EXTRACT_FILE_PATH, supportedExtensions, PROCESS_FILE_TIME_OUT, MAX_INGRES_X_FUNCTION, X_FUNCTION_INGRES_TIMEOUT, get_invalid_dir_fragments,  set_invalid_dir_fragments } = require('../../config/constants');
 const { Worker, parentPort } = require('worker_threads');
 const { createParentBus, createChildBus } = require('../../services/messaging/workerBus');
 const { EXTRACT_FUNCTION_NAMES, EXTRACT_FILE_NAMES, INODE_MODIFIED_AT, FETCHED_FUNCTIONS, UPDATE_REGEX_CONFIG, UPDATE_IGNORE_CONFIG } = require('../../config/constants');
+const {isExcluded} = require('../../utils/common')
 
 const fs = require('fs');
 const path = require('path');
@@ -20,9 +21,6 @@ const debounceMap = new Map();
 let updateInodeModifiedAtTimer = null;
 let ingress = 0;
 
-function isExcluded(filePath) {
-    return !filePath || get_invalid_file_path().some(suffix => filePath.includes(suffix));
-}
 
 
 async function processFiles() {
@@ -153,7 +151,7 @@ function serve(message) {
 		childBus.postMessage(message.type, message.payload, message.priority);
 	} else if (message.type === UPDATE_IGNORE_CONFIG) {
 		logger.debug('[Worker:extractFileName] update ignore config');
-		set_invalid_file_path(message.payload);
+		set_invalid_dir_fragments(message.payload);
 	} else {
 		logger.debug('[Worker:extractFileName] unhandled msg', message);
 	}

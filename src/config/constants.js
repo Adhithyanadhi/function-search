@@ -5,9 +5,79 @@ const FILE_EXTRACT_FILE_PATH = path.join(__dirname, '../services/workers/extract
 const DISK_WORKER_FILE_PATH = path.join(__dirname, '../services/workers/diskWorker.js');
 const FUNCTION_EXTRACT_FILE_PATH = path.join(__dirname, '../services/workers/extractFunctionNameWorker.js');
 
-let INVALID_FILE_PATH = [
-    ".min.js", ".git", '.log', '.tmp', '.bak', '.history/', '/tmp/', '/bin/', '/cache/', '.xml', '.class', '/vendor/'
+let INVALID_DIR_FRAGMENTS = [
+  // VCS / IDE
+  "/.git/",
+  "/.svn/",
+  "/.hg/",
+  "/.bzr/",
+  "/.idea/",
+  "/.vscode/",
+  "/.vs/",
+  "/.history/",
+
+  // JS / TS / frontend deps & build
+  "/node_modules/",
+  "/bower_components/",
+  "/jspm_packages/",
+  "/.next/",
+  "/.nuxt/",
+  "/.svelte-kit/",
+  "/.angular/cache/",
+  "/.turbo/",
+  "/.parcel-cache/",
+  "/.rollup.cache/",
+  "/.eslintcache",
+
+  // Generic build output (usually generated, not source of truth)
+  "/dist/",
+  "/build/",
+  "/out/",
+  "/release/",
+  "/debug/",
+  "/.cache/",
+
+  // Python deps / caches
+  "/__pycache__/",
+  "/.pytest_cache/",
+  "/.mypy_cache/",
+  "/.ruff_cache/",
+  "/.tox/",
+  "/.nox/",
+  "/.ipynb_checkpoints/",
+  "/site-packages/",
+  "/.venv/",
+  "/venv/",
+  // (intentionally *not* excluding plain `/env/` because it can be user data)
+
+  // JVM stuff
+  "/.gradle/",
+  "/.mvn/",
+  "/target/",
+
+  // PHP / Composer
+  "/vendor/",
+
+  // Ruby / Bundler
+  "/.bundle/",
+  "/vendor/bundle/",
+
+  // Rust / Go
+  "/.cargo/",
+  "/target/",
+  "/pkg/",
+  "/.cache/go-build/",
+
+  // C / C++ / CMake
+  "/CMakeFiles/",
+  "/cmake-build-debug/",
+  "/cmake-build-release/",
+
+  // System-y junk
+  "/.Trash-",
+  "/lost+found/"
 ];
+
 
 const FILE_EDIT_DEBOUNCE_DELAY = 2000;
 const ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY = 200;
@@ -81,13 +151,13 @@ const DELETE_ALL_CACHE = 'delete-all-cache';
 const UPDATE_REGEX_CONFIG = 'update-regex-config';
 const UPDATE_IGNORE_CONFIG = 'update-ignore-config';
 
-function get_invalid_file_path(){
-    return INVALID_FILE_PATH;
+function get_invalid_dir_fragments(){
+    return INVALID_DIR_FRAGMENTS;
 }
 
-function set_invalid_file_path(x){
-    INVALID_FILE_PATH.push(...x);
-    INVALID_FILE_PATH = [...new Set(INVALID_FILE_PATH)];
+function set_invalid_dir_fragments(x){
+    INVALID_DIR_FRAGMENTS.push(...x);
+    INVALID_DIR_FRAGMENTS = [...new Set(INVALID_DIR_FRAGMENTS)];
 }
 
 module.exports = {
@@ -113,8 +183,8 @@ module.exports = {
     UPDATE_REGEX_CONFIG,
     UPDATE_IGNORE_CONFIG,
     DELETE_ALL_CACHE,
-    get_invalid_file_path,
-    set_invalid_file_path,
+    get_invalid_dir_fragments,
+    set_invalid_dir_fragments,
 };
 
 
