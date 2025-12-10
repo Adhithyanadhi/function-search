@@ -43,6 +43,11 @@ async function activate(context) {
     const indexerService = bootstrap.getService('indexerService');
 	try {
         await indexerService.activate(context);
+		const config = vscode.workspace.getConfiguration('function-name-search');
+		const userConfigRegex = config.get('regexes') || {};
+		indexerService.updateUserRegexConfig(userConfigRegex);
+		const userConfigIgnore = config.get('ignore') || {};
+		indexerService.updateUserIgnoreConfig(userConfigIgnore);
 	} catch (err) {
 		console.error('[Extension] IndexerService activation failed:', err);
 	}

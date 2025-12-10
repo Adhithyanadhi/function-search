@@ -148,9 +148,11 @@ function serve(message) {
 		inodeModifiedAt = (message.payload && message.payload.map) || message.data;
 	} else if (message.type === UPDATE_REGEX_CONFIG) {
 		logger.debug('[Worker:extractFileName] update regex config');
+		inodeModifiedAt = new Map();
 		childBus.postMessage(message.type, message.payload, message.priority);
 	} else if (message.type === UPDATE_IGNORE_CONFIG) {
 		logger.debug('[Worker:extractFileName] update ignore config');
+		inodeModifiedAt = new Map();
 		set_invalid_dir_fragments(message.payload);
 	} else {
 		logger.debug('[Worker:extractFileName] unhandled msg', message);

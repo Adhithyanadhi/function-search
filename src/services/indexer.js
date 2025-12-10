@@ -50,7 +50,8 @@ function buildRegexConfig(userConfig) {
       for (const p of patterns) {
         if (typeof p === 'string' && p.trim()) {
           result[ext] ??= [];
-          result[ext].push(p);
+          const reg = new RegExp(p);
+          result[ext].push(reg);
         }
       }
     }
@@ -183,6 +184,7 @@ class IndexerService extends BaseService {
      */
     updateUserRegexConfig(userConfig) {
         this.bus.updateRegexConfig(buildRegexConfig(userConfig));
+        this.inodeModifiedAt.clear();
         this.bus.extractFileNames({ workspacePath: this.workspacePath, filePath: this.workspacePath, extension: "__all__", initialLoad: true }, 'low');
     }
 
