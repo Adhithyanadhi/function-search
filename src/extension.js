@@ -46,7 +46,7 @@ async function activate(context) {
 		const config = vscode.workspace.getConfiguration('function-name-search');
 		const userConfigRegex = config.get('regexes') || {};
 		indexerService.updateUserRegexConfig(userConfigRegex);
-		const userConfigIgnore = config.get('ignore') || [];
+		const userConfigIgnore = config.get('ignore') || {};
 		indexerService.updateUserIgnoreConfig(userConfigIgnore);
 	} catch (err) {
 		console.error('[Extension] IndexerService activation failed:', err);
@@ -69,7 +69,7 @@ async function activate(context) {
 		} else if (e.affectsConfiguration('function-name-search.ignore')) {
 			if (!indexerService) return;
 			const config = vscode.workspace.getConfiguration('function-name-search');
-			const userConfig = config.get('ignore') || [];
+			const userConfig = config.get('ignore') || {};
 			indexerService.updateUserIgnoreConfig(userConfig);
 		}
 	});
