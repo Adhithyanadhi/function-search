@@ -118,7 +118,6 @@ class IndexerService extends BaseService {
         logger.debug('[Indexer] Activation with workspacePath:', this.workspacePath);
         await initializeEnvironment(context, workspacePath);
         await this.loadFromDiskOnStartup();
-        this.globalFunctionNames = await this.dbRepo.getAllFunctionNames();
         this.rebuildCachedFunctionList();
         logger.debug('[Indexer] Cached function list size after rebuild:', this.cachedFunctionList.length);
         if (vscode.window.activeTextEditor) {
@@ -202,14 +201,11 @@ class IndexerService extends BaseService {
         }, interval);
     }
 
-
-
     async loadFromDiskOnStartup() {
         try {
             const days = Number(process.env.FUNCTION_SEARCH_TIME_WINDOW_DAYS);
             const windowStartMs = Date.now() - (days * MILLISECONDS_PER_DAY);
-            const base = getDBDir();
-            const data = await this.dbRepo.loadStartupCache(base, windowStartMs);
+            const data = await this.dbRepo.loadStartupCache(getDBDir(), windowStartMs);
             this.functionIndex.load(data.functionIndex);
             this.inodeModifiedAt.load(data.inodeModifiedAt);
             logger.info('[Indexer] Loaded from DB:', this.inodeModifiedAt.size,    this.functionIndex.size);
@@ -250,7 +246,6 @@ class IndexerService extends BaseService {
             this.fileToRangeMap.set(currentFile, { start: currentStart, end: this.cachedFunctionList.length });
         }
     }
-
 
     createDiskWorker(){
         this.diskWorker = new Worker(DISK_WORKER_FILE_PATH);
@@ -337,10 +332,11 @@ class IndexerService extends BaseService {
     rebuildCachedFunctionList() {
         this.cachedFunctionList = [];
         this.fileToRangeMap.clear();
-        for (const [file, functions] of this.functionIndex.entries()) {
+        for (const [file, functionsByName] of this.functionIndex.entries()) {
             const ext      = getExtensionFromFilePath(file);
             const iconPath = this.iconResolver.getIconPath(ext);
-            const items    = functions.map(f => prepareFunctionProperties(f, file, iconPath, ext));
+            const functionList = Object.values(functionsByName ?? {});
+            const items = functionList.map(f => prepareFunctionProperties(f, file, iconPath, ext));
             this.cachedFunctionList.push(...items);
         }
         this.prioritizeCurrentFileExtHandler();
@@ -370,8 +366,7 @@ class IndexerService extends BaseService {
     }
 
     updateCacheHandler(filePath) {
-        const updatedFunctions = this.functionIndex.get(filePath) || [];
-        this.updateCache(filePath, updatedFunctions);
+        this.updateCache(filePath, this.functionIndex.get(filePath) || []);
         this.prioritizeCurrentFileExtHandler();
     }
 

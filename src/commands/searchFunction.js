@@ -6,12 +6,12 @@ const { getExtensionFromFilePath } = require('../utils/common');
 const { MILLISECONDS_PER_DAY } = require('../config/constants');
 const { prepareFunctionProperties } = require('../services/indexer');
 const logger = require('../utils/logger');
+const { isSubsequence } = require('../utils/common');
 
 class SearchFunctionCommand extends BaseCommand {
     constructor(container) {
         super(container);
         this.indexerService = null;
-        this.fallbackCache = new Map();
         this.iconResolver = null;
     }
 
@@ -44,92 +44,80 @@ class SearchFunctionCommand extends BaseCommand {
                 this.indexerService.rebuildCachedFunctionList();
             }
 
-            const fallbackProvider = async (lcQuery) => {
+            const fallbackProvider = async (queryTerm) => {
                 try {
-                    // Check cache first
-                    if (this.fallbackCache.has(lcQuery)) {
-                        return this.fallbackCache.get(lcQuery);
+                    if (!queryTerm) {
+                        // check whether to return this.indexerservice.functionIndex full
+                        return [];
                     }
 
-                    const days = Number(process.env.FUNCTION_SEARCH_TIME_WINDOW_DAYS);
-                    const windowStartMs = Date.now() - (days * MILLISECONDS_PER_DAY);
+                    // Initialize time window once
+                    if (this.fallbackWindowStartMs == null) {
+                        const days = Number(process.env.FUNCTION_SEARCH_TIME_WINDOW_DAYS);
+                        this.fallbackWindowStartMs = Date.now() - (days * MILLISECONDS_PER_DAY);
+                    }
+
+                    const baseDir = getDBDir();
+
+                    const matches = [];
                     const limit = Number(process.env.FUNCTION_SEARCH_MAX_SQL_CANDIDATES);
-                    const names = this.indexerService.globalFunctionNames
-                        .filter(n => n && n.toLowerCase().includes(lcQuery[0]))
-                        .slice(0, limit);
-                    if (names.length === 0) {return [];}
-                    const rows = await this.searchFallbackCandidates(getDBDir(), windowStartMs, names, limit);
-                    const out = [];
-                    for (const r of rows) {
-                        let arr = [];
-                        try { arr = JSON.parse(r.functions || '[]'); } catch {}
-                        if (!Array.isArray(arr)) {continue;}
-                        for (const f of arr) {
-                            if (!f || !f.name) {continue;}
-                            const nameLc = f.name.toLowerCase();
-                            if (!lcQuery || !nameLc) {continue;}
-                            if (nameLc.includes(lcQuery[0])) {
-                                const extension = getExtensionFromFilePath(r.filePath);
-                                const iconPath = this.iconResolver.getIconPath(extension);
-                                const functionProps = prepareFunctionProperties(f, r.filePath, iconPath, extension);
-                                out.push(functionProps);
-                                
-                                // Store discovered function in buffer
-                                this.indexerService.functionIndex.set(r.filePath, this.indexerService.functionIndex.get(r.filePath) || []);
-                                const existingFunctions = this.indexerService.functionIndex.get(r.filePath);
-                                if (!existingFunctions.some(existing => existing.name === f.name)) {
-                                    existingFunctions.push(f);
+
+                    // Safety: don’t loop forever in a bug
+                    let fallbackOffset = 0;
+                    while (matches.length === 0) {
+
+                        // 1. candidate_fn_list = fetch next set of files with lastAccessedAt < time
+                        
+                        const rows = await this.indexerService.dbRepo.getOlderFileCache(this.fallbackWindowStartMs, limit, fallbackOffset); 
+
+                        // Advance offset for next time
+                        fallbackOffset += limit;
+
+                        for (const r of rows) {
+                            let functions = [];
+                            try {
+                                functions = JSON.parse(r.functions);
+                            } catch {
+                                continue;
+                            }
+                            if (functions == null || functions.length === 0) {
+                                continue;
+                            }
+
+                            // 2. Update functionIndex with this candidate list
+                            //    so we never have to fetch this file again.
+                            this.indexerService.functionIndex.set(r.file_name, functions);
+
+                            // 3. matching_list = for fn in candidate_fn_list : check for lcs
+                            const extension = getExtensionFromFilePath(r.file_name);
+                            const iconPath = this.iconResolver.getIconPath(extension);
+
+                            for (const [fnName, f] of Object.entries(functions ?? {})) {
+                                if (isSubsequence(queryTerm, fnName.toLowerCase())) {
+                                    matches.push(f);
                                 }
                             }
                         }
-                        if (out.length >= limit) {break;}
+
+                        // 4. if matching_list > 0 return; else loop to next batch
+                        if (!rows || rows.length === 0 || rows.length < limit || matches.length > 0) {
+                            break;
+                        }
                     }
-                    
-                    // Cache the results
-                    this.fallbackCache.set(lcQuery, out);
-                    return out;
-                } catch { return []; }
+
+                    return matches;
+                } catch (err) {
+                    console.error('[SearchFunctionCommand] fallbackProvider error:', err);
+                    return [];
+                }
             };
 
             QuickPickService.showFunctionSearchQuickPick(this.indexerService.cachedFunctionList, this.indexerService.currentFileExtension, fallbackProvider, (filePath) => {
-                this.indexerService.markFileAccessed(filePath);
+                    this.indexerService.markFileAccessed(filePath);
             });
         });
         context.subscriptions.push(disposable);
     }
-
-    /**
-     * Search fallback candidates
-     */
-    async searchFallbackCandidates(baseDir, windowStartMs, names, limit) {
-        if (names.length === 0) {return [];}
-        const capped = names.slice(0, limit);
-
-        const candidateFilePaths = await this.indexerService.dbRepo.getCandidateFilePathsForFallback(capped, windowStartMs, limit);
-        if (candidateFilePaths.length === 0) {return [];}
-        return await this.fetchFunctionBlobsForFiles(candidateFilePaths, limit);
-    }
-
-    /**
-     * Fetch function blobs for files
-     */
-    async fetchFunctionBlobsForFiles(filePaths, limit) {
-        const out = [];
-        const chunkSize = 200;
-        for (let i = 0; i < filePaths.length; i += chunkSize) {
-            const chunk = filePaths.slice(i, i + chunkSize);
-            try {
-                const rows = this.indexerService.dbRepo.getSelectByFilePathsStmt(chunk);
-                out.push(...rows);
-            } catch (e) {
-                logger.error('[SearchFunctionCommand] fetchFunctionBlobsForFiles failed:', e);
-            }
-            if (out.length >= limit) {break;}
-        }
-        return out.slice(0, limit);
-    }
 }
 
 module.exports = { SearchFunctionCommand };
-
-

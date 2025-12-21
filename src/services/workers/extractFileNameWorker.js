@@ -160,9 +160,9 @@ function serve(message) {
 }
 
 childBus.on(FETCHED_FUNCTIONS, (message) => {
-		ingress--;
-		const p = message.payload || {};
-		logger.debug('[Worker:extractFileName] emitting fetchedFunctions for', p.filePath, 'count=', (p.functions||[]).length);
+	ingress--;
+	const p = message.payload || {};
+	logger.debug('[Worker:extractFileName] emitting fetchedFunctions for', p.filePath, 'count=', (p.functions||[]).length);
 	parentBus.postMessage(FETCHED_FUNCTIONS, p, 'low');
 });
 

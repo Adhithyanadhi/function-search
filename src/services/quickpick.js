@@ -47,7 +47,7 @@ class QuickPickService {
     				if (filteredFunctions.length === 0 && fallbackProvider) {
     					try {
     						const fb = await fallbackProvider(lcSearchText);
-    						if (Array.isArray(fb) && fb.length > 0) {
+    						if (fb.length > 0) {
     							filteredFunctions = fb;
     							allFunctions = [...filteredFunctions, ...allFunctions];
     						}

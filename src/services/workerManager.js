@@ -10,13 +10,6 @@ class WorkerManager {
         this.functionIndex = functionIndex;
         this.postMessage = this.postMessage.bind(this);
 
-        this.worker.on('message', (message) => {
-            logger.error(
-                'WorkerManager received invalid-message:',
-                JSON.stringify(message, null, 2)
-            );
-        });
-
         this.worker.on('error', (err) => logger.error("Worker Error:", err));
 
         this.worker.on('exit', (code) => {

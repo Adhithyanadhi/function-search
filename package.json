@@ -45,7 +45,9 @@
   },
   "activationEvents": [
     "onStartupFinished",
-    "onView:function-name-search"
+    "onCommand:extension.searchFunction",
+    "onCommand:extension.clearIndex",
+    "onCommand:extension.writeToCache"
   ],
   "main": "./src/extension.js",
   "contributes": {
@@ -62,6 +64,15 @@
               "type": "string"
             },
             "description": "List of regex patterns as strings."
+          }
+        },
+        "function-name-search.ignore": {
+          "type": "array",
+          "default": [],
+          "description": "Custom list of files/folders to ignore, just like .gitignore.",
+          "items": {
+            "type": "string",
+            "description": "File/folder glob patterns, e.g. '**/dist/**'."
           }
         }
       }
@@ -90,11 +101,6 @@
         "command": "extension.searchFunction",
         "key": "ctrl+shift+k",
         "when": "functionSearch.isCursor"
-      },
-      {
-        "command": "extension.searchFunction",
-        "key": "ctrl+shift+k",
-        "when": "!functionSearch.isCursor"
       }
     ]
   },

@@ -32,10 +32,10 @@ function extractFunctions(filePath, relativeFilePath) {
     }
 
 
-    for (const regex of regexes) {
-        if (!regex) {continue;}
 
-        fileContent.split('\n').forEach((line, index) => {
+    fileContent.split('\n').forEach((line, index) => {
+        for (const regex of regexes) {
+            if (!regex) {continue;}
             const match = line.match(regex);
             if (match) {
                 if (match[1] !== undefined) {
@@ -45,10 +45,11 @@ function extractFunctions(filePath, relativeFilePath) {
                         line: index+1,
                         relativeFilePath,
                     });
+                    break;
                 }
             }
-        });
-    }
+        }
+    });
 
     return functionList;
 }

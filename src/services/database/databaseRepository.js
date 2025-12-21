@@ -107,26 +107,13 @@ class DatabaseRepository extends BaseService {
 
     const sql = `
       CREATE TABLE IF NOT EXISTS file_cache (
-        fileName TEXT PRIMARY KEY,
-        inodeModifiedAt INTEGER,
-        lastAccessedAt INTEGER
-      );
-      CREATE TABLE IF NOT EXISTS file_functions (
-        fileName TEXT PRIMARY KEY REFERENCES file_cache(fileName) ON DELETE CASCADE,
+        file_name TEXT PRIMARY KEY,
+        inode_modified_at INTEGER,
+        last_accessed_at INTEGER,
         functions TEXT
       );
-      CREATE TABLE IF NOT EXISTS function_names (
-        functionName TEXT PRIMARY KEY
-      );
-      CREATE TABLE IF NOT EXISTS function_occurrences (
-        functionName TEXT,
-        fileName TEXT,
-        PRIMARY KEY (functionName, fileName)
-      ) WITHOUT ROWID;
 
-      CREATE INDEX IF NOT EXISTS idx_file_cache_last_accessed ON file_cache(lastAccessedAt);
-      CREATE INDEX IF NOT EXISTS idx_function_names_functionName ON function_names(functionName);
-      CREATE INDEX IF NOT EXISTS idx_function_occurrences_functionName ON function_occurrences(functionName);
+      CREATE INDEX IF NOT EXISTS idx_file_cache_last_accessed ON file_cache(last_accessed_at);
     `;
 
     try {
@@ -236,29 +223,6 @@ class DatabaseRepository extends BaseService {
     await super.dispose();
   }
 
-  /**
-   * Get candidate file paths for fallback search
-   */
-  async getCandidateFilePathsForFallback(names, windowStartMs, limit) {
-    const inPlaceholders = names.map(() => '?').join(',');
-    const candidateFilePathsQuery = `
-        SELECT DISTINCT fo.fileName AS filePath
-        FROM function_occurrences fo0
-        JOIN file_cache fc ON fc.fileName = fo.fileName
-        WHERE fo.functionName IN (${inPlaceholders})
-          AND (fc.lastAccessedAt IS NULL OR fc.lastAccessedAt < ?)
-        LIMIT ?
-    `;
-    try {
-        const rows = this.db.prepare(candidateFilePathsQuery).all(...names, windowStartMs, limit);
-        return rows.map(r => r.filePath);
-    } catch (e) {
-        logger.error('[SearchFunctionCommand] getCandidateFilePathsForFallback failed:', e);
-        return [];
-    }
-  }
-
-
   deleteDBFile(){ 
     try { 
       fs.unlinkSync(this.dbPath); 
@@ -281,48 +245,21 @@ class DatabaseRepository extends BaseService {
     return true;
   }
 
-  async getSelectByFilePath(filePaths) {
-    if (!filePaths || filePaths.length === 0) {
-      return [];
-    }
-    const placeholders = filePaths.map(_ => '?').join(',');
-    const sql = `
-      SELECT fc.fileName, fc.inodeModifiedAt, fc.lastAccessedAt, ff.functions
-      FROM file_cache fc
-      LEFT JOIN file_functions ff ON ff.fileName = fc.fileName
-      WHERE fc.fileName IN (${placeholders})
-    `;
-    return await this.db.all(sql, filePaths);
-  }
 
-  async getFileCache() {
-    if (!this.db) throw new Error('Database not open');
-    return this.db.all('SELECT fileName, inodeModifiedAt, lastAccessedAt FROM file_cache');
-  }
-
-  /**
-   * Load startup cache from database
-   */
   async loadStartupCache(baseDir, windowStartMs) {
       const inodeModifiedAt = new Map();
       const functionIndex = new Map();
       try {
-          const base = baseDir || path.dirname(this.dbPath);
-          if (!this.db) this.ensureOpen(base, true);
-
-          const fileCacheRows = await this.getFileCache();
-          for (const row of fileCacheRows) {
-              inodeModifiedAt.set(row.fileName, row.inodeModifiedAt);
-          }
-
-          const filePaths = await this.getRecentFilePaths(base, windowStartMs);
-          const rows = await this.getSelectByFilePath(filePaths);
+          if (!this.db) this.ensureOpen(baseDir, true);
+          
+          const rows = await this.getRecentFileCache(windowStartMs);
           for (const r of rows) {
+              inodeModifiedAt.set(r.file_name, r.inode_modified_at);
               if (r.functions) {
                   try {
-                      functionIndex.set(r.fileName, JSON.parse(r.functions));
+                      functionIndex.set(r.file_name, JSON.parse(r.functions));
                   } catch {
-                      functionIndex.set(r.fileName, []);
+                      functionIndex.set(r.file_name, []);
                   }
               }
           }
@@ -332,53 +269,37 @@ class DatabaseRepository extends BaseService {
       return { inodeModifiedAt, functionIndex };
   }
 
-  /**
-   * Get recent file paths from database
-   */
-  async getRecentFilePaths(baseDir, windowStartMs) {
-      try {
-          const rows = this.db.prepare(
-              'SELECT fileName FROM file_cache WHERE lastAccessedAt IS NOT NULL AND lastAccessedAt >= ?'
-          ).all(windowStartMs);
-          return rows.map(r => r.fileName);
-      } catch (e) {
-          logger.error('[Indexer] getRecentFilePaths failed:', e);
-          return [];
-      }
-  }
 
-  /**
-   * Get functions for file from database
-   */
-  async getFunctionsForFile(fileName) {
-      try {
-          const row = this.db.prepare('SELECT functions FROM file_functions WHERE fileName = ?').get(fileName);
-          if (!row || !row.functions) return [];
-          const arr = JSON.parse(row.functions);
-          return Array.isArray(arr) ? arr : [];
-      } catch (e) {
-          logger.error('[Indexer] getFunctionsForFile failed:', e);
-          return [];
-      }
-  }
-  /**
-   * Get all function names from database
-   */
-  async getAllFunctionNames() {
+  async getRecentFileCache(windowStartMs) {
+    const out = [];
     try {
-        const rows = this.db.prepare('SELECT functionName FROM function_names').all();
-        return rows.map(r => r.functionName);
+      const rows = await this.db.prepare(
+          'SELECT file_name, inode_modified_at, last_accessed_at, functions FROM file_cache WHERE last_accessed_at IS NOT NULL AND last_accessed_at >= ?'
+      ).all(windowStartMs);
+      out.push(...rows);
     } catch (e) {
-        logger.error('[Indexer] getAllFunctionNames failed:', e);
-        return [];
+      logger.error('[SearchFunctionCommand] getRecentFileCache failed:', e);
     }
+    return out;
   }
 
+  async getOlderFileCache(windowStartMs, limit, offset) {
+    const out = [];
+    try {
+      const rows = await this.db.prepare(
+          `SELECT file_name, inode_modified_at, last_accessed_at, functions FROM file_cache WHERE (last_accessed_at IS NULL OR last_accessed_at < ?) ORDER BY last_accessed_at ASC LIMIT ${limit} OFFSET ${offset}`
+      ).all(windowStartMs);
+      out.push(...rows);
+    } catch (e) {
+      logger.error('[SearchFunctionCommand] getOlderFileCache failed:', e);
+    }
+    return out;
+  }
 
   async lastaccessCachewrite(data) {
-    const upsert =  "INSERT INTO file_cache (fileName, lastAccessedAt) VALUES (?, ?) " +
-      "ON CONFLICT(fileName) DO UPDATE SET " +
-      "  lastAccessedAt = MAX(COALESCE(file_cache.lastAccessedAt, 0), excluded.lastAccessedAt) " 
+    const upsert =  "INSERT INTO file_cache (file_name, last_accessed_at) VALUES (?, ?) " +
+      "ON CONFLICT(file_name) DO UPDATE SET " +
+      "  last_accessed_at = MAX(COALESCE(file_cache.last_accessed_at, 0), excluded.last_accessed_at) " 
     ;
 
     const tx = this.transaction(async (data) => {
@@ -398,9 +319,9 @@ class DatabaseRepository extends BaseService {
 
 
   async inodeModifiedAtCachewrite(data) {
-    const upsert =  "INSERT INTO file_cache (fileName, inodeModifiedAt) VALUES (?, ?) " +
-      "ON CONFLICT(fileName) DO UPDATE SET " +
-      "  inodeModifiedAt = MAX(COALESCE(file_cache.inodeModifiedAt, 0), excluded.inodeModifiedAt) " 
+    const upsert =  "INSERT INTO file_cache (file_name, inode_modified_at) VALUES (?, ?) " +
+      "ON CONFLICT(file_name) DO UPDATE SET " +
+      "  inode_modified_at = MAX(COALESCE(file_cache.inode_modified_at, 0), excluded.inode_modified_at) " 
     ;
 
     const tx = this.transaction(async (data) => {
@@ -419,74 +340,33 @@ class DatabaseRepository extends BaseService {
   }
 
 
-  async functionCachewrite(newData) {
-    this.createSchema();
-    // Normalize input to Map
-    const map = newData instanceof Map ? newData : new Map(newData || []);
 
-    const upsertFunctions = this.getPreparedStatement(
-      'INSERT INTO file_functions (fileName, functions) VALUES (?, ?) ' +
-      'ON CONFLICT(fileName) DO UPDATE SET functions = excluded.functions'
-    );
-    const upsertName = this.getPreparedStatement(
-      'INSERT OR IGNORE INTO function_names (functionName) VALUES (?)'
-    );
-    const upsertFileCache = this.getPreparedStatement(
-      'INSERT OR IGNORE INTO file_cache (fileName) VALUES (?)'
-    );
-    const insertOccurrence = this.getPreparedStatement(
-      'INSERT OR IGNORE INTO function_occurrences (functionName, fileName) VALUES (?, ?)'
-    );
+async  functionCachewrite(newData) {
+  this.createSchema();
 
-    // Precompute
-    const allFunctionNames = new Set();
-    const allFileNames = new Set();
-    const fileFunctionPairs = [];
+  const upsertFileCache = this.getPreparedStatement(
+    'INSERT INTO file_cache (file_name, functions) VALUES (?, ?) ' +
+    'ON CONFLICT(file_name) DO UPDATE SET functions = excluded.functions'
+  );
 
-    for (const [filePath, functions] of map) {
-      const names = getSetFromListFunction(functions);
-      allFileNames.add(filePath);
-      for (const fn of names) {
-        allFunctionNames.add(fn);
-        fileFunctionPairs.push([fn, filePath]);
-      }
+  this.db.exec('BEGIN;');
+  try {
+    for (const [filePath, functionsArr] of newData) {
+      const functionsObj = Object.create(null);
+      for (const fn of functionsArr) functionsObj[fn.name] = fn; // last wins
+      const functionsJson = JSON.stringify(functionsObj);
+
+      await upsertFileCache.run(filePath, functionsJson);
     }
+    this.db.exec('COMMIT;');
+  } catch (e) {
+    this.db.exec('ROLLBACK;');
+    throw e;
+  }
+}
 
 
-    try {
-      logger.debug(`[functionIndex] Writing ${map.size} files, ${allFunctionNames.size} unique functions`);
 
-        this.db.exec('BEGIN;');
-        for (const fn of allFileNames) {
-          await upsertFileCache.run(fn);
-        }
-        this.db.exec('COMMIT;');
-
-        this.db.exec('BEGIN;');
-        for (const fn of allFunctionNames) {
-          await upsertName.run(fn);
-        }
-        this.db.exec('COMMIT;');
-
-        this.db.exec('BEGIN;');
-        for (const [filePath, functions] of map) {
-          const json = JSON.stringify(functions || []);
-          await upsertFunctions.run(filePath, json);
-        }
-        this.db.exec('COMMIT;');
-
-        this.db.exec('BEGIN;');
-        for (const [fn, filePath] of fileFunctionPairs) {
-          await insertOccurrence.run(fn, filePath);
-        }
-        this.db.exec('COMMIT;');
-
-      logger.debug(`[functionIndex] Wrote ${map.size} files, ${allFunctionNames.size} unique functions`);
-    } catch (e) {
-      logger.error('[functionIndex] Failed to write:', e);
-      throw e;
-    }
-  } 
 }
 
 module.exports = { DatabaseRepository };
