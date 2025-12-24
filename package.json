@@ -9,6 +9,7 @@
     "type": "git",
     "url": "https://github.com/Adhithyanadhi/function-search"
   },
+  "enabledApiProposals": ["quickPickItemResource"],
   "bugs": {
     "url": "https://github.com/Adhithyanadhi/function-search/issues"
   },
@@ -39,7 +40,6 @@
     "function navigation",
     "func navigation"
   ],
-  "icon": "icons/icon.png",
   "engines": {
     "vscode": "^1.80.0"
   },

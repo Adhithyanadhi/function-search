@@ -2,7 +2,6 @@ const { ServiceContainer } = require('./serviceContainer');
 const { DatabaseRepository } = require('../database/databaseRepository');
 const { CommandManager } = require('../commands/commandManager');
 const { FileSystemService } = require('../utilities/fileSystemService');
-const { IconResolverService } = require('../utilities/iconResolverService');
 const { DualBufferManager } = require('../dualBufferManager');
 const { IndexerService } = require('../indexer');
 
@@ -21,7 +20,6 @@ class ServiceBootstrap {
     registerServices() {
         // Core services
         this.container.register('fileSystemService', () => new FileSystemService(this.container), true);
-        this.container.register('iconResolverService', () => new IconResolverService(this.container), true);
 
         // Database services
         this.container.register('databaseRepository', () => new DatabaseRepository(this.container), true);
@@ -53,7 +51,6 @@ class ServiceBootstrap {
         // Initialize services in dependency order
         const initOrder = [
             'fileSystemService',
-            'iconResolverService',
             'databaseRepository',
             'lastAccessBuffer',
             'inodeModifiedBuffer',
