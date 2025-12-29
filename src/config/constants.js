@@ -90,31 +90,39 @@ const MILLISECONDS_PER_DAY = 86400000; // 24 * 60 * 60 * 1000
 
 const FILE_PROPERTIES = {
     ".py": {
-        regex: [/^\s*(?:async\s+)?def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/],
+        regex: [/^\s*def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*/],
+        fileIcon: 'py.svg',
     },
     ".rb": {
         regex: [/^\s*def\s+(?:self\.)?([a-zA-Z_][a-zA-Z0-9_!?]*)\s*/],
+        fileIcon: 'rb.svg',
     },
     ".go": {
         regex:[ /^\s*func\s+(?:[\w\s,*]*\)\s*)?([a-zA-Z_][a-zA-Z0-9_]*)\s*/],
+        fileIcon: 'go.svg',
     },
     ".java": {
         regex: [/^\s*(?:public|private|protected)?\s*(?:static\s+)?(?:final\s+)?(?:[\w<>\[\],]+\s+)+(?!if|for|while|switch|catch)([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/],
+        fileIcon: 'java.svg',
     },
     ".js": {
         regex:[ /^\s*(?:async\s+)?function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*/],
+        fileIcon: 'js.svg',
     },
     ".ts": {
         regex:[ /^\s*(?:async\s+)?function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*/],
+        fileIcon: 'ts.svg',
     },
     ".kt": {
         regex:[ /^\s*fun\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*/],
     },
     ".c": {
         regex: [/^\s*(?:[a-zA-Z_][\w\s\*]*\s+)+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/],
+        fileIcon: 'c.svg'
     },
     ".cpp": {
         regex:[ /^\s*(?:[a-zA-Z_][\w\s:<>\*&]*\s+)+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/],
+        fileIcon: 'cpp.svg'
     },
     ".cs": {
         regex: [/^\s*(?:public|private|protected|internal)?\s*(?:static\s+)?[\w<>\[\],\s]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/],
@@ -124,6 +132,7 @@ const FILE_PROPERTIES = {
     },
     ".rs": {
         regex: [/\s*fn\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/],
+        fileIcon: 'rs.svg',
     },
     ".swift": {
         regex: [/^\s*func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/],

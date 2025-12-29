@@ -3,7 +3,6 @@ const path = require('path');
 const { get_invalid_dir_fragments, supportedExtensions } = require('../config/constants');
 
 function isSubsequence(sub, target) {
-    if(target == null || target == "") {return true;}
     let i = 0, j = 0;
     while (i < sub.length && j < target.length) {
         if (sub[i] === target[j]) {i++;}

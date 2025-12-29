@@ -16,7 +16,7 @@ const { configLoader } = require('../config/configLoader');
 const logger = require('../utils/logger');
 
 
-function prepareFunctionProperties(f, file, extension) {
+function prepareFunctionProperties(f, file, iconPath, extension) {
     return {
         label: f.name,
         lowercased_label: f.name.toLowerCase(),
@@ -24,8 +24,7 @@ function prepareFunctionProperties(f, file, extension) {
         file,
         line: f.line,
         function_name: f.name,
-        resourceUri: vscode.Uri.file(f.file),
-        iconPath: vscode.ThemeIcon.File,
+        iconPath,
         alwaysShow: true,
         extension
     }
@@ -94,6 +93,7 @@ class IndexerService extends BaseService {
         this.fileToRangeMap = new Map();
         this.debounceChangeActiveDoc = null;
         this.flushToDBIntervalHandle = null;
+        this.iconResolver = undefined;
         this.dbRepo = null;
     }
 
@@ -106,6 +106,7 @@ class IndexerService extends BaseService {
         this.functionIndex = this.container.get('functionIndexBuffer');
         this.lastAccessIndex = this.container.get('lastAccessBuffer');
         this.inodeModifiedAt = this.container.get('inodeModifiedBuffer');
+        this.iconResolver = this.container.get('iconResolverService');
         
         logger.debug('[IndexerService] Initialized');
     }
@@ -333,8 +334,9 @@ class IndexerService extends BaseService {
         this.fileToRangeMap.clear();
         for (const [file, functionsByName] of this.functionIndex.entries()) {
             const ext      = getExtensionFromFilePath(file);
+            const iconPath = this.iconResolver.getIconPath(ext);
             const functionList = Object.values(functionsByName ?? {});
-            const items = functionList.map(f => prepareFunctionProperties(f, file, ext));
+            const items = functionList.map(f => prepareFunctionProperties(f, file, iconPath, ext));
             this.cachedFunctionList.push(...items);
         }
         this.prioritizeCurrentFileExtHandler();
@@ -342,7 +344,8 @@ class IndexerService extends BaseService {
 
     updateCache(filePath, newFunctions) {
         const ext = getExtensionFromFilePath(filePath)
-        const newItems = newFunctions.map(f => prepareFunctionProperties(f, filePath, ext));
+        const iconPath = this.iconResolver.getIconPath(ext)
+        const newItems = newFunctions.map(f => prepareFunctionProperties(f, filePath, iconPath, ext));
 
         const oldRange = this.fileToRangeMap.get(filePath);
         if (oldRange) {

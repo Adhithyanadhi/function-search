@@ -12,12 +12,14 @@ class SearchFunctionCommand extends BaseCommand {
     constructor(container) {
         super(container);
         this.indexerService = null;
+        this.iconResolver = null;
     }
 
     /**
      * Initialize the command
      */
     async initialize() {
+        this.iconResolver = this.container.get('iconResolverService');
         this.indexerService = this.container.get('indexerService');
     }
 
@@ -88,6 +90,7 @@ class SearchFunctionCommand extends BaseCommand {
 
                             // 3. matching_list = for fn in candidate_fn_list : check for lcs
                             const extension = getExtensionFromFilePath(r.file_name);
+                            const iconPath = this.iconResolver.getIconPath(extension);
 
                             for (const [fnName, f] of Object.entries(functions ?? {})) {
                                 if (isSubsequence(queryTerm, fnName.toLowerCase())) {
