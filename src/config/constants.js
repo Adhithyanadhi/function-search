@@ -129,6 +129,7 @@ const FILE_PROPERTIES = {
     },
     ".php": {
         regex: [/^\s*function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/],
+        fileIcon: 'php.svg'
     },
     ".rs": {
         regex: [/\s*fn\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/],

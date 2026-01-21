@@ -92,11 +92,6 @@ function preprocessFiles(absoluteFilePath, extension) {
 		return filesToProcess;
 	}
 
-	function handleFiles(fullPath) {
-		if ((extension === '__all__' && supportedExtensions.some(ext => fullPath.endsWith(ext))) || fullPath.endsWith(extension)) {
-			filesToProcess.push(fullPath);
-		}
-	}
 
 	function readDirRecursive(fullPath) {
 		try {
@@ -111,14 +106,15 @@ function preprocessFiles(absoluteFilePath, extension) {
 			if (stat.mtimeMs <= lastSeen) {
 				return;
 			}
+
 			if (stat.isDirectory()) {
 				updateInodeModifiedAt(fullPath, stat.mtimeMs);
 				fs.readdirSync(fullPath).forEach(entry => {
 					readDirRecursive(path.join(fullPath, entry));
 				});
-			} else {
-				updateInodeModifiedAt(fullPath, stat.mtimeMs);
-				handleFiles(fullPath);
+			} else if (fullPath.endsWith(extension) || (extension === '__all__' && supportedExtensions.some(ext => fullPath.endsWith(ext)))) {
+					updateInodeModifiedAt(fullPath, stat.mtimeMs);
+					filesToProcess.push(fullPath);
 			}
         } catch (err) {
             logger.error(`Failed to stat: ${fullPath}`, err);

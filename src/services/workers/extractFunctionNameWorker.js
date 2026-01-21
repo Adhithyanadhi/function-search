@@ -31,8 +31,6 @@ function extractFunctions(filePath, relativeFilePath) {
         return functionList;
     }
 
-
-
     fileContent.split('\n').forEach((line, index) => {
         for (const regex of regexes) {
             if (!regex) {continue;}
