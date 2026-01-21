@@ -77,7 +77,6 @@ async function processFiles() {
         if (!fs.existsSync(filePath)) {continue;}
         const relativeFilePath = path.relative(workspacePath, filePath);
         const functions = await extractFunctions(filePath, relativeFilePath);
-        if(functions.length == 0){ continue;}
         parentBus.postMessage(FETCHED_FUNCTIONS, { filePath, functions }, 'low');
     }
 
@@ -85,7 +84,9 @@ async function processFiles() {
 }
 
 parentPort.on('message', (message) => {
-    if (message.type === EXTRACT_FUNCTION_NAMES) {
+    if(message.type == 'PING'){
+        parentPort.postMessage({type: "PONG", response_id: message.request_id});
+    } else if (message.type === EXTRACT_FUNCTION_NAMES) {
         try {
             const p = message.payload || message;
             const pr = p.priority || 'low';
@@ -105,5 +106,3 @@ parentPort.on('message', (message) => {
 		logger.error('[Worker:extractFunctoinName] received invalid message',JSON.stringify(message, null, 2));
     }
 });
-
-

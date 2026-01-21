@@ -8,7 +8,11 @@ const {isExcluded} = require('../../utils/common')
 
 const fs = require('fs');
 const path = require('path');
-const functionWorker = new Worker(FUNCTION_EXTRACT_FILE_PATH)
+
+let functionWorker = null;
+createFunctionWorker();
+
+
 const parentBus = createParentBus(parentPort);
 const childBus = createChildBus(functionWorker);
 
@@ -20,8 +24,6 @@ let idle = true;
 const debounceMap = new Map();
 let updateInodeModifiedAtTimer = null;
 let ingress = 0;
-
-
 
 async function processFiles() {
 	if (!idle) {return;}
@@ -73,7 +75,7 @@ async function extractFileNames(task) {
 
 		while (ingress >= MAX_INGRES_X_FUNCTION) {
 			logger.debug("Max ingress reached", ingress);
-			await new Promise(resolve => setTimeout(resolve, X_FUNCTION_INGRES_TIMEOUT));
+			await functionWorkerHeathCheck();
 		}
 
 		ingress++;
@@ -124,6 +126,79 @@ function preprocessFiles(absoluteFilePath, extension) {
 	return filesToProcess;
 }
 
+
+function createFunctionWorker(){
+	functionWorker = new Worker(FUNCTION_EXTRACT_FILE_PATH)
+}
+
+async function restartFunctionWorker() {
+	logger.warn('[Indexer] Restarting functionWorker');
+
+	try {
+		await functionWorker.terminate();
+	} catch (err) {
+		logger.error('[Indexer] Error terminating old functionWorker', err);
+	}
+
+	createFunctionWorker();
+}
+
+
+async function functionWorkerHeathCheck() {
+	const timeoutMs = 10000;
+	const worker = functionWorker; // snapshot
+
+	return new Promise((resolve, reject) => {
+		// Case 1: worker is null -> wait 2s, then try again
+		if (!worker) {
+			setTimeout(() => {
+				// after 2s, check again
+				if (!functionWorker) {
+					return reject(new Error('FunctionWorker is null even after wait'));
+				}
+				// re-run healthcheck on the new worker
+				functionWorkerHeathCheck().then(resolve).catch(reject);
+			}, timeoutMs);
+			return;
+		}
+
+		const request_id = Date.now(); // current timestamp as request_id
+
+		const onMessage = (msg) => {
+			if (!msg || msg.type !== 'PONG') return;
+			if (msg.response_id !== request_id) return; // not our PONG
+
+			clearTimeout(timer);
+			worker.off('message', onMessage);
+			resolve(msg);
+		};
+
+		const timer = setTimeout(async () => {
+			worker.off('message', onMessage);
+
+			const restartPromise = restartFunctionWorker();
+			restartPromise.catch((err) => {
+				logger.error('[Indexer] Failed to restart FunctionWorker', err);
+			});
+			await restartPromise;      
+			resolve(`New FunctionWorker created after timeout (request_id=${request_id})`);
+		}, timeoutMs);
+
+		worker.on('message', onMessage);
+
+		try {
+			worker.postMessage({ type: 'PING', request_id });
+		} catch (err) {
+			clearTimeout(timer);
+			worker.off('message', onMessage);
+			reject(err);
+		}
+	});
+}
+
+
+
+
 function serve(message) {
 	if (message.type === EXTRACT_FILE_NAMES) {
 		const payload = message.payload || message;
@@ -159,7 +234,9 @@ childBus.on(FETCHED_FUNCTIONS, (message) => {
 	ingress--;
 	const p = message.payload || {};
 	logger.debug('[Worker:extractFileName] emitting fetchedFunctions for', p.filePath, 'count=', (p.functions||[]).length);
-	parentBus.postMessage(FETCHED_FUNCTIONS, p, 'low');
+	if(p.functions !== null || p.functions.length > 0){
+		parentBus.postMessage(FETCHED_FUNCTIONS, p, 'low');
+	}
 });
 
 parentPort.on('message', (message) => { serve(message) });
