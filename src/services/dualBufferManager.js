@@ -22,6 +22,7 @@ class DualBufferManager extends BaseService {
         this.newBuffer = new Map();
         this.dirty = false;
         this.maxSize = configLoader.get('BUFFER_MAX_SIZE', 10000);
+        this.flushToDisk = null;
     }
 
     /**
@@ -30,6 +31,10 @@ class DualBufferManager extends BaseService {
     async initialize() {
         await super.initialize();
         logger.debug(`[${this.name}] Initialized with max size: ${this.maxSize}`);
+    }
+
+    setFlushToDisk(flushToDisk) {
+        this.flushToDisk = typeof flushToDisk === 'function' ? flushToDisk : null;
     }
 
     /**
@@ -68,22 +73,47 @@ class DualBufferManager extends BaseService {
     /**
      * Trim the buffer by removing oldest entries from primary buffer
      * @private
-     */
+    */
     trimBuffer() {
-        const entriesToRemove = this.getTotalSize() - this.maxSize;
-        if (entriesToRemove <= 0) {
-            return;
-        }
+        let toWriteBuffer = new Map();
 
         const primaryEntries = Array.from(this.primaryBuffer.entries());
-        const entriesToKeep = primaryEntries.slice(entriesToRemove);
-        
+
+        // split point: keep the older part, move the later part
+        const keepCount = Math.floor(this.maxSize / 2);
+        const entriesToKeep = primaryEntries.slice(0, keepCount);
+        const entriesToMove = primaryEntries.slice(keepCount);
+
+        // Move later entries into toWriteBuffer (preserve their order)
+        for (const [key, value] of entriesToMove) {
+            toWriteBuffer.set(key, value);
+        }
+
+        // Rebuild primaryBuffer with kept entries
         this.primaryBuffer.clear();
         for (const [key, value] of entriesToKeep) {
             this.primaryBuffer.set(key, value);
         }
-        
-        logger.debug(`[${this.name}] Trimmed buffer, removed ${entriesToRemove} entries`);
+
+        logger.debug(
+            `[${this.name}] Trimmed buffer, moved ${entriesToMove.length} entries to toWriteBuffer`
+        );
+
+        this.flushTrimmedToDisk(toWriteBuffer);
+    }
+
+    flushTrimmedToDisk(toWriteBuffer) {
+        if (!this.flushToDisk) {
+            return;
+        }
+
+        if (!toWriteBuffer || toWriteBuffer.size === 0) {
+            return;
+        }
+
+        Promise.resolve(this.flushToDisk(toWriteBuffer)).catch((err) => {
+            logger.error(`[${this.name}] Trim flush failed`, err);
+        });
     }
 
     /**

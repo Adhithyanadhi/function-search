@@ -133,6 +133,9 @@ class IndexerService extends BaseService {
         this.bus.updateRegexConfig(buildRegexConfig(null));
 
         this.createDiskWorker();
+        this.functionIndex.setFlushToDisk(this.flushToDisk.bind(this, 'functionIndex'));
+        this.lastAccessIndex.setFlushToDisk(this.flushToDisk.bind(this, 'lastAccess'));
+        this.inodeModifiedAt.setFlushToDisk(this.flushToDisk.bind(this, 'inodeModifiedAt'));
         this.bus.bind();
         this.bus.on(FETCHED_FUNCTIONS, (m) => {
             const p = m.payload || {};
@@ -321,6 +324,40 @@ class IndexerService extends BaseService {
         this.diskWorker.postMessage(payload);
     }
 
+    async flushToDisk(writeKey, toWriteBuffer) {
+        if (!writeKey) {
+            return;
+        }
+
+        const entries = toWriteBuffer instanceof Map
+            ? Array.from(toWriteBuffer.entries())
+            : Array.isArray(toWriteBuffer)
+                ? toWriteBuffer
+                : [];
+
+        if (entries.length === 0) {
+            return;
+        }
+
+        const dbPath = getDBDir();
+        if (!dbPath) {
+            logger.warn('[Indexer] Skipping trim flush; dbPath not set');
+            return;
+        }
+
+        const payload = {
+            type: WRITE_CACHE_TO_FILE,
+            payload: {
+                dbPath,
+                functionIndex: [],
+                lastAccess: [],
+                inodeModifiedAt: []
+            }
+        };
+
+        payload.payload[writeKey] = entries;
+        await this.diskWorkerPostMessage(payload);
+    }
 
 
 
