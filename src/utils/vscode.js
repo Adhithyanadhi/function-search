@@ -41,6 +41,33 @@ function getDBDir() {
   return dbDir;
 }
 
+async function deleteOlderCacheFilesInDbDir() {
+  if (!dbDir) { return; }
+  try {
+    const deleteJsonFilesInDir = async (dirPath) => {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      const jsonFiles = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.json'));
+      if (jsonFiles.length === 0) { return; }
+      await Promise.all(jsonFiles.map((entry) => {
+        const filePath = path.join(dirPath, entry.name);
+        return fs.unlink(filePath).catch(() => {});
+      }));
+    };
+
+    await deleteJsonFilesInDir(dbDir);
+
+    const parentDir = path.dirname(dbDir);
+    const parentEntries = await fs.readdir(parentDir, { withFileTypes: true });
+    const childDirs = parentEntries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    await Promise.all(childDirs.map((dirName) => {
+      const childPath = path.join(parentDir, dirName);
+      return deleteJsonFilesInDir(childPath).catch(() => {});
+    }));
+  } catch {
+    // intentionally ignored (low-priority cleanup)
+  }
+}
+
 function getWorkspacePath() {
   const ws =
     (vscode.workspace && Array.isArray(vscode.workspace.workspaceFolders) && vscode.workspace.workspaceFolders[0] && vscode.workspace.workspaceFolders[0].uri && vscode.workspace.workspaceFolders[0].uri.fsPath)
@@ -72,9 +99,8 @@ function getExtensionUri(){
 module.exports = {
   initializeEnvironment,
   getDBDir,
+  deleteOlderCacheFilesInDbDir,
   getWorkspacePath,
   getExtensionUri,
   getWorkspaceFolder
 };
-
-

@@ -1,6 +1,6 @@
 const vscode = require('vscode');
 const { bootstrap } = require('./services/core/bootstrap');
-const { initializeEnvironment, getDBDir } = require('./utils/vscode');
+const { initializeEnvironment, getDBDir, deleteOlderCacheFilesInDbDir } = require('./utils/vscode');
 const { SearchFunctionCommand } = require('./commands/searchFunction');
 const { ClearIndexCommand } = require('./commands/clearIndex');
 const { WriteToCacheCommand } = require('./commands/writeToCache');
@@ -20,6 +20,7 @@ async function activate(context) {
     let dbReady = false;
     try {
         await initializeEnvironment(context);
+		void deleteOlderCacheFilesInDbDir();
         
         // Initialize service architecture
         bootstrap.registerServices();
