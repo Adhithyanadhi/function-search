@@ -6,13 +6,24 @@ const { watchForChanges } = require("./watcher");
 const { WorkerManager } = require('./workerManager');
 const { Worker } = require('worker_threads');
 const { WorkerBus } = require('./messaging/bus');
-// src/services/indexerService.js
-const path = require('path');
 
-const {UPDATE_REGEX_CONFIG, UPDATE_IGNORE_CONFIG, FILE_PROPERTIES, FETCHED_FUNCTIONS,INODE_MODIFIED_AT,   WRITE_CACHE_TO_FILE, DELETE_ALL_CACHE, DISK_WORKER_FILE_PATH, ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY, SNAPSHOT_TO_DISK_INTERVAL, supportedExtensions, 
-FILE_EXTRACT_FILE_PATH, MILLISECONDS_PER_DAY, 
-get_invalid_dir_fragments} = require('../config/constants');
-const { configLoader } = require('../config/configLoader');
+const {
+    FILE_PROPERTIES,
+    FETCHED_FUNCTIONS,
+    INODE_MODIFIED_AT,
+    WRITE_CACHE_TO_FILE,
+    DELETE_ALL_CACHE,
+    DISK_WORKER_FILE_PATH,
+    ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY,
+    SNAPSHOT_TO_DISK_INTERVAL,
+    supportedExtensions,
+    FILE_EXTRACT_FILE_PATH,
+    MILLISECONDS_PER_DAY,
+    INIT_DB,
+    DB_READY,
+    DB_INIT_FAILED,
+    get_invalid_dir_fragments
+} = require('../config/constants');
 const logger = require('../utils/logger');
 
 
@@ -95,6 +106,7 @@ class IndexerService extends BaseService {
         this.flushToDBIntervalHandle = null;
         this.iconResolver = undefined;
         this.dbRepo = null;
+        this.diskWorkerInitPromise = null;
     }
 
     /**
@@ -127,10 +139,19 @@ class IndexerService extends BaseService {
         return true;
     }
 
-    initWorkers() {
-        this.fileWorker = new WorkerManager(FILE_EXTRACT_FILE_PATH, this.functionIndex);
+    initWorkers(initialConfig = null) {
+        this.fileWorker = new WorkerManager(FILE_EXTRACT_FILE_PATH);
         this.bus = new WorkerBus(this.fileWorker.worker, this.fileWorker);
         this.bus.updateRegexConfig(buildRegexConfig(null));
+
+        if (initialConfig) {
+            if (initialConfig.regexes) {
+                this.bus.updateRegexConfig(buildRegexConfig(initialConfig.regexes), 'high', false, null);
+            }
+            if (initialConfig.ignore) {
+                this.bus.updateIgnoreConfig(buildIgnoreConfig(initialConfig.ignore), 'high', false, null);
+            }
+        }
 
         this.createDiskWorker();
         this.functionIndex.setFlushToDisk(this.flushToDisk.bind(this, 'functionIndex'));
@@ -184,15 +205,28 @@ class IndexerService extends BaseService {
      * Called from extension.js whenever settings change.
      * @param {Record<string, string[]>} userConfig
      */
-    updateUserRegexConfig(userConfig) {
-        this.bus.updateRegexConfig(buildRegexConfig(userConfig));
-        this.inodeModifiedAt.clear();
-        this.bus.extractFileNames({ workspacePath: this.workspacePath, filePath: this.workspacePath, extension: "__all__", initialLoad: true }, 'low');
+    updateUserRegexConfig(userConfig, isModified = false) {
+        this.bus.updateRegexConfig(
+            buildRegexConfig(userConfig),
+            'high',
+            isModified,
+            isModified ? { workspacePath: this.workspacePath, filePath: this.workspacePath, extension: "__all__", initialLoad: true } : null
+        );
+        if (isModified) {
+            this.inodeModifiedAt.clear();
+        }
     }
 
-    updateUserIgnoreConfig(userConfig) {
-        this.bus.updateIgnoreConfig(buildIgnoreConfig(userConfig));
-        this.bus.extractFileNames({ workspacePath: this.workspacePath, filePath: this.workspacePath, extension: "__all__", initialLoad: true }, 'low');
+    updateUserIgnoreConfig(userConfig, isModified = false) {
+        this.bus.updateIgnoreConfig(
+            buildIgnoreConfig(userConfig),
+            'high',
+            isModified,
+            isModified ? { workspacePath: this.workspacePath, filePath: this.workspacePath, extension: "__all__", initialLoad: true } : null
+        );
+        if (isModified) {
+            this.inodeModifiedAt.clear();
+        }
     }
 
     startSnapshotTimer() {
@@ -251,18 +285,109 @@ class IndexerService extends BaseService {
     }
 
     createDiskWorker(){
+        if (this.diskWorker) {
+            return this.diskWorker;
+        }
         this.diskWorker = new Worker(DISK_WORKER_FILE_PATH);
+        this.diskWorker.on('error', (err) => {
+            logger.error('[Indexer] DiskWorker error:', err);
+        });
+        this.diskWorker.on('exit', (code) => {
+            if (code !== 0) {
+                logger.error('[Indexer] DiskWorker exited with code', code);
+            }
+            this.diskWorker = undefined;
+            this.diskWorkerInitPromise = null;
+        });
+        return this.diskWorker;
+    }
+
+    async ensureDiskWorkerDbReady(dbPath, timeoutMs = 10_000) {
+        if (!dbPath) {
+            throw new Error('dbPath is required to initialize DiskWorker DB');
+        }
+        const worker = this.createDiskWorker();
+        if (this.diskWorkerInitPromise) {
+            return this.diskWorkerInitPromise;
+        }
+
+        const requestId = Date.now();
+        const initPromise = new Promise((resolve, reject) => {
+            let timer = null;
+
+            const cleanup = () => {
+                if (timer) {
+                    clearTimeout(timer);
+                    timer = null;
+                }
+                worker.off('message', onMessage);
+                worker.off('error', onError);
+                worker.off('exit', onExit);
+            };
+
+            const onMessage = (msg) => {
+                if (!msg || msg.response_id !== requestId) {
+                    return;
+                }
+                if (msg.type === DB_READY) {
+                    cleanup();
+                    resolve(true);
+                } else if (msg.type === DB_INIT_FAILED) {
+                    cleanup();
+                    reject(new Error(msg.error || 'DiskWorker DB init failed'));
+                }
+            };
+
+            const onError = (err) => {
+                cleanup();
+                reject(err);
+            };
+
+            const onExit = (code) => {
+                cleanup();
+                reject(new Error(`DiskWorker exited during DB init (code=${code})`));
+            };
+
+            timer = setTimeout(() => {
+                cleanup();
+                reject(new Error(`Timed out waiting for DiskWorker DB init after ${timeoutMs}ms`));
+            }, timeoutMs);
+
+            worker.on('message', onMessage);
+            worker.on('error', onError);
+            worker.on('exit', onExit);
+
+            try {
+                worker.postMessage({
+                    type: INIT_DB,
+                    request_id: requestId,
+                    payload: { dbPath }
+                });
+            } catch (err) {
+                cleanup();
+                reject(err);
+            }
+        }).catch((err) => {
+            this.diskWorkerInitPromise = null;
+            throw err;
+        });
+
+        this.diskWorkerInitPromise = initPromise;
+        return this.diskWorkerInitPromise;
     }
 
     async restartDiskWorker() {
         logger.warn('[Indexer] Restarting DiskWorker');
 
         try {
-            await this.diskWorker.terminate();
+            if (this.diskWorker) {
+                await this.diskWorker.terminate();
+            }
         } catch (err) {
             logger.error('[Indexer] Error terminating old DiskWorker', err);
         }
-
+        this.diskWorker = undefined;
+        this.diskWorkerInitPromise = null;
         this.createDiskWorker();
     }
 
@@ -423,14 +548,30 @@ class IndexerService extends BaseService {
         this.lastAccessIndex.clearNewBuffer();
     }
 
+    writeUserConfigToDB(userConfig) {
+        if (!userConfig) { return; }
+        const dbPath = getDBDir();
+        if (!dbPath) { return; }
+        this.diskWorkerPostMessage({
+            type: WRITE_CACHE_TO_FILE,
+            payload: {
+                dbPath,
+                functionIndex: [],
+                lastAccess: [],
+                inodeModifiedAt: [],
+                userConfig
+            }
+        });
+    }
+
     deleteAllCache() {
         this.diskWorkerPostMessage({ type: DELETE_ALL_CACHE, payload: {dbPath: getDBDir()} });
     }
 
-    async activate(context) {
+    async activate(context, initialConfig = null) {
         const ok = await this.initializeCore(context);
         if (!ok) {return;}
-        this.initWorkers();
+        this.initWorkers(initialConfig);
         const watcher = watchForChanges(this.workspacePath, this.functionIndex, this.bus, this.updateCacheHandler.bind(this));
         if (watcher) {
             this.watcher = watcher;

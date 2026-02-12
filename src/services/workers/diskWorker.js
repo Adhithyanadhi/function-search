@@ -1,14 +1,34 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const { parentPort } = require('worker_threads');
 const { ServiceContainer } = require('../core/serviceContainer');
 const { DatabaseRepository } = require('../database/databaseRepository');
-const { WRITE_CACHE_TO_FILE, DELETE_ALL_CACHE } = require('../../config/constants');
+const {
+    WRITE_CACHE_TO_FILE,
+    DELETE_ALL_CACHE,
+    INIT_DB,
+    DB_READY,
+    DB_INIT_FAILED
+} = require('../../config/constants');
 const logger = require('../../utils/logger');
 
 const container = new ServiceContainer();
 
 let dbRepo = null;
+
+function forceDeleteSqliteLockFile(baseDir) {
+    const lockFilePath = path.join(baseDir, 'db.sqlite.lock');
+    try {
+        if (!fs.existsSync(lockFilePath)) { return; }
+
+        fs.rmSync(lockFilePath, { recursive: true, force: true });
+        logger.warn('[DiskWorker] Removed stale SQLite lock directory:', lockFilePath);
+    } catch (err) {
+        logger.warn('[DiskWorker] Failed to remove SQLite lock file:', lockFilePath, err);
+    }
+}
 
 async function initializeServices() {
     try {
@@ -56,10 +76,10 @@ function enqueueWrite(message) {
                 return;
             }
 
-            const { dbPath, functionIndex, lastAccess, inodeModifiedAt } = payload;
+            const { dbPath, functionIndex, lastAccess, inodeModifiedAt, userConfig } = payload;
 
             if (!dbPath) {
-                logger.error('[DiskWorker] Missing dbPath in write payload', data);
+                logger.error('[DiskWorker] Missing dbPath in write payload', payload);
                 return;
             }
 
@@ -72,6 +92,7 @@ function enqueueWrite(message) {
                         await dbRepo.functionCachewrite(functionIndex);
                         await dbRepo.lastaccessCachewrite(lastAccess);
                         await dbRepo.inodeModifiedAtCachewrite(inodeModifiedAt);
+                        await dbRepo.userConfigCachewrite(userConfig);
                         break;
 
                     case DELETE_ALL_CACHE:
@@ -98,10 +119,43 @@ function enqueueWrite(message) {
         });
 }
 
+function enqueueInit(message) {
+    const requestId = message?.request_id;
+    const dbPath = message?.payload?.dbPath;
+
+    writeChain = writeChain
+        .then(async () => {
+            if (!dbRepo) {
+                throw new Error('DiskWorker DB service not initialized');
+            }
+            if (!dbPath) {
+                throw new Error('Missing dbPath in init payload');
+            }
+
+            forceDeleteSqliteLockFile(dbPath);
+            dbRepo.ensureOpen(dbPath, false);
+
+            parentPort.postMessage({
+                type: DB_READY,
+                response_id: requestId
+            });
+        })
+        .catch((err) => {
+            logger.error('[DiskWorker] DB init failed:', err);
+            parentPort.postMessage({
+                type: DB_INIT_FAILED,
+                response_id: requestId,
+                error: String(err && err.message ? err.message : err)
+            });
+        });
+}
+
 // Message handler: just route to the queue, do NOT await writes here
 parentPort.on('message', (message) => {
-    if(message.type == 'PING'){
+    if (message.type === 'PING') {
         parentPort.postMessage({type: "PONG", response_id: message.request_id});
+    } else if (message.type === INIT_DB) {
+        enqueueInit(message);
     } else {
         enqueueWrite(message);
     }

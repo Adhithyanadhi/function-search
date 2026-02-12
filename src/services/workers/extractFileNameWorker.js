@@ -216,15 +216,29 @@ function serve(message) {
 		}
 	} else if (message.type === INODE_MODIFIED_AT) {
 		logger.debug('[Worker:extractFileName] set inodeModifiedAt map');
-		inodeModifiedAt = (message.payload && message.payload.map) || message.data;
+		inodeModifiedAt = message.payload && message.payload.map;
 	} else if (message.type === UPDATE_REGEX_CONFIG) {
 		logger.debug('[Worker:extractFileName] update regex config');
-		inodeModifiedAt = new Map();
-		childBus.postMessage(message.type, message.payload, message.priority);
+		const payload = message.payload || {};
+		if (payload.resetinodemodifiedat) {
+			inodeModifiedAt = new Map();
+		}
+		childBus.postMessage(message.type, payload.regexConfig, message.priority);
+		if (payload.scanPayload) {
+			highPriorityFileQueue.push(payload.scanPayload);
+			processFiles();
+		}
 	} else if (message.type === UPDATE_IGNORE_CONFIG) {
 		logger.debug('[Worker:extractFileName] update ignore config');
-		inodeModifiedAt = new Map();
-		set_invalid_dir_fragments(message.payload);
+		const payload = message.payload || {};
+		if (payload.resetinodemodifiedat) {
+			inodeModifiedAt = new Map();
+		}
+		set_invalid_dir_fragments(payload.ignoreConfig);
+		if (payload.scanPayload) {
+			highPriorityFileQueue.push(payload.scanPayload);
+			processFiles();
+		}
 	} else {
 		logger.debug('[Worker:extractFileName] unhandled msg', message);
 	}
@@ -240,5 +254,3 @@ childBus.on(FETCHED_FUNCTIONS, (message) => {
 });
 
 parentPort.on('message', (message) => { serve(message) });
-
-

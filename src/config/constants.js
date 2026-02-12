@@ -149,6 +149,9 @@ const FETCHED_FUNCTIONS = 'fetchedFunctions';
 const WRITE_CACHE_TO_FILE = 'write-cache-to-file';
 const INODE_MODIFIED_AT = 'inodemodifiedat';
 const DELETE_ALL_CACHE = 'delete-all-cache';
+const INIT_DB = 'init-db';
+const DB_READY = 'db-ready';
+const DB_INIT_FAILED = 'db-init-failed';
 const UPDATE_REGEX_CONFIG = 'update-regex-config';
 const UPDATE_IGNORE_CONFIG = 'update-ignore-config';
 
@@ -184,8 +187,10 @@ module.exports = {
     UPDATE_REGEX_CONFIG,
     UPDATE_IGNORE_CONFIG,
     DELETE_ALL_CACHE,
+    INIT_DB,
+    DB_READY,
+    DB_INIT_FAILED,
     get_invalid_dir_fragments,
     set_invalid_dir_fragments,
 };
-
 

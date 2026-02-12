@@ -28,7 +28,7 @@ class ServiceBootstrap {
 
         // Buffer managers
         this.container.register('lastAccessBuffer', () => new DualBufferManager(this.container, 'LastAccess'), true);
-        this.container.register('inodeModifiedBuffer', () => new DualBufferManager(this.container, 'InodeModfied'), true);
+        this.container.register('inodeModifiedBuffer', () => new DualBufferManager(this.container, 'InodeModfied', Number.POSITIVE_INFINITY), true);
         this.container.register('functionIndexBuffer', () => new DualBufferManager(this.container, 'FunctionIndex'), true);
 
         // Command management

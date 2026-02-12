@@ -56,7 +56,47 @@ function isExcluded(filePath) {
     return !filePath || get_invalid_dir_fragments().some(suffix => filePath.includes(suffix));
 }
 
-module.exports = { isSubsequence, getDirPath, getExtensionFromFilePath, prioritizeCurrentFileExt, isExcluded, resetInterval, getSetFromListFunction};
+function normalizeUserConfig(cfg) {
+    const regexes = (cfg && cfg.regexes && typeof cfg.regexes === 'object' && !Array.isArray(cfg.regexes))
+        ? cfg.regexes
+        : {};
+    const ignore = (cfg && Array.isArray(cfg.ignore)) ? cfg.ignore : [];
+    return { regexes, ignore };
+}
 
+function deepEqual(a, b) {
+    if (a === b) { return true; }
+    if (typeof a !== typeof b) { return false; }
+    if (a && b && typeof a === 'object') {
+        if (Array.isArray(a) !== Array.isArray(b)) { return false; }
+        if (Array.isArray(a)) {
+            if (a.length !== b.length) { return false; }
+            for (let i = 0; i < a.length; i++) {
+                if (!deepEqual(a[i], b[i])) { return false; }
+            }
+            return true;
+        }
+        const aKeys = Object.keys(a);
+        const bKeys = Object.keys(b);
+        if (aKeys.length !== bKeys.length) { return false; }
+        for (const k of aKeys) {
+            if (!deepEqual(a[k], b[k])) { return false; }
+        }
+        return true;
+    }
+    return false;
+}
+
+module.exports = {
+    isSubsequence,
+    getDirPath,
+    getExtensionFromFilePath,
+    prioritizeCurrentFileExt,
+    isExcluded,
+    resetInterval,
+    getSetFromListFunction,
+    normalizeUserConfig,
+    deepEqual
+};
 
 

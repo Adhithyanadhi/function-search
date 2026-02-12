@@ -15,13 +15,13 @@ const { configLoader } = require('../config/configLoader');
  * - DB writes only flush newBuffer
  */
 class DualBufferManager extends BaseService {
-    constructor(container, name = 'DualBuffer') {
+    constructor(container, name = 'DualBuffer', maxSize = configLoader.get('BUFFER_MAX_SIZE')) {
         super(container);
         this.name = name;
         this.primaryBuffer = new Map();
         this.newBuffer = new Map();
         this.dirty = false;
-        this.maxSize = configLoader.get('BUFFER_MAX_SIZE', 10000);
+        this.maxSize = maxSize;
         this.flushToDisk = null;
     }
 
