@@ -1,4 +1,3 @@
-require('../utils/logger');
 const path = require('path');
 
 const FILE_EXTRACT_FILE_PATH = path.join(__dirname, '../services/workers/extractFileNameWorker.js');
@@ -87,6 +86,15 @@ const MAX_INGRES_X_FUNCTION = 1000;
 const X_FUNCTION_INGRES_TIMEOUT = 10;
 const SNAPSHOT_TO_DISK_INTERVAL = 10 * 60 * 1000;
 const MILLISECONDS_PER_DAY = 86400000; // 24 * 60 * 60 * 1000
+const FUNCTION_SEARCH_LOG_LEVEL = 'debug';
+const FUNCTION_SEARCH_MAX_LOG_SIZE_BYTES = 5 * 1024 * 1024;
+const FUNCTION_SEARCH_TIME_WINDOW_DAYS = 14;
+const FUNCTION_SEARCH_MAX_SQL_CANDIDATES = 300;
+const BUFFER_MAX_SIZE = 10000;
+const FILESYSTEM_CACHE_ENABLED = true;
+const SQLITE_CACHE_SIZE_KB = 200 * 1024;
+const SQLITE_MMAP_SIZE = 256 * 1024 * 1024;
+const SQLITE_TXN_CHUNK_SIZE = 200;
 
 const FILE_PROPERTIES = {
     ".py": {
@@ -148,6 +156,7 @@ const EXTRACT_FUNCTION_NAMES = 'extractFunctionNames';
 const FETCHED_FUNCTIONS = 'fetchedFunctions';
 const WRITE_CACHE_TO_FILE = 'write-cache-to-file';
 const INODE_MODIFIED_AT = 'inodemodifiedat';
+const INODE_FOLDER_BUCKET = 'folder';
 const DELETE_ALL_CACHE = 'delete-all-cache';
 const INIT_DB = 'init-db';
 const DB_READY = 'db-ready';
@@ -179,11 +188,21 @@ module.exports = {
     X_FUNCTION_INGRES_TIMEOUT,
     ACTIVE_DOC_CHANGE_DEBOUNCE_DELAY,
     MILLISECONDS_PER_DAY,
+    FUNCTION_SEARCH_LOG_LEVEL,
+    FUNCTION_SEARCH_MAX_LOG_SIZE_BYTES,
+    FUNCTION_SEARCH_TIME_WINDOW_DAYS,
+    FUNCTION_SEARCH_MAX_SQL_CANDIDATES,
+    BUFFER_MAX_SIZE,
+    FILESYSTEM_CACHE_ENABLED,
+    SQLITE_CACHE_SIZE_KB,
+    SQLITE_MMAP_SIZE,
+    SQLITE_TXN_CHUNK_SIZE,
     EXTRACT_FILE_NAMES,
     EXTRACT_FUNCTION_NAMES,
     FETCHED_FUNCTIONS,
     WRITE_CACHE_TO_FILE,
     INODE_MODIFIED_AT,
+    INODE_FOLDER_BUCKET,
     UPDATE_REGEX_CONFIG,
     UPDATE_IGNORE_CONFIG,
     DELETE_ALL_CACHE,
@@ -193,4 +212,3 @@ module.exports = {
     get_invalid_dir_fragments,
     set_invalid_dir_fragments,
 };
-

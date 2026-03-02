@@ -9,14 +9,16 @@ const highPriorityFileQueue = new Map();
 const lowPriorityFileQueue = new Map();
 
 let idle = true;
-let regex_store = null;
+const regex_store = {};
 
+/**
+ * Extract function metadata from a file.
+ * @param {string} filePath
+ * @param {string} relativeFilePath
+ * @returns {Array<{name: string, file: string, line: number, relativeFilePath: string}>}
+ */
 function extractFunctions(filePath, relativeFilePath) {
     const functionList = [];
-    if(!regex_store){
-        logger.error("extractFunctions - regex not initialized");
-        return functionList;
-    }
 
     const fileContent = fs.readFileSync(filePath, 'utf8');
 
@@ -101,8 +103,11 @@ parentPort.on('message', (message) => {
             parentBus.postMessage('error', { message: error.message }, 'high');
         }
     } else if(message.type === UPDATE_REGEX_CONFIG){
-        regex_store = message.payload;
+        const updates = message.payload || {};
+        for (const [ext, regexes] of Object.entries(updates)) {
+            regex_store[ext] = regexes;
+        }
     } else{
-		logger.error('[Worker:extractFunctoinName] received invalid message',JSON.stringify(message, null, 2));
+			logger.error('[Worker:extractFunctoinName] received invalid message',JSON.stringify(message, null, 2));
     }
 });

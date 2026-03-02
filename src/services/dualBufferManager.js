@@ -1,6 +1,6 @@
 const logger = require('../utils/logger');
 const { BaseService } = require('./core/baseService');
-const { configLoader } = require('../config/configLoader');
+const { BUFFER_MAX_SIZE } = require('../config/constants');
 
 /**
  * DualBufferManager - Unified buffer system for efficient data management
@@ -15,7 +15,7 @@ const { configLoader } = require('../config/configLoader');
  * - DB writes only flush newBuffer
  */
 class DualBufferManager extends BaseService {
-    constructor(container, name = 'DualBuffer', maxSize = configLoader.get('BUFFER_MAX_SIZE')) {
+    constructor(container, name = 'DualBuffer', maxSize = BUFFER_MAX_SIZE) {
         super(container);
         this.name = name;
         this.primaryBuffer = new Map();
@@ -34,7 +34,7 @@ class DualBufferManager extends BaseService {
     }
 
     setFlushToDisk(flushToDisk) {
-        this.flushToDisk = typeof flushToDisk === 'function' ? flushToDisk : null;
+        this.flushToDisk = flushToDisk;
     }
 
     /**
@@ -107,11 +107,12 @@ class DualBufferManager extends BaseService {
             return;
         }
 
-        if (!toWriteBuffer || toWriteBuffer.size === 0) {
+        const entries = Array.from(toWriteBuffer.entries());
+        if (entries.length === 0) {
             return;
         }
 
-        Promise.resolve(this.flushToDisk(toWriteBuffer)).catch((err) => {
+        Promise.resolve(this.flushToDisk(entries)).catch((err) => {
             logger.error(`[${this.name}] Trim flush failed`, err);
         });
     }

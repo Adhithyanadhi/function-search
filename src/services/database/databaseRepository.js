@@ -3,7 +3,11 @@ const path = require('path');
 const fs = require('fs');
 const logger = require('../../utils/logger');
 const { BaseService } = require('../core/baseService');
-const { configLoader } = require('../../config/configLoader');
+const {
+  SQLITE_CACHE_SIZE_KB,
+  SQLITE_MMAP_SIZE,
+  SQLITE_TXN_CHUNK_SIZE
+} = require('../../config/constants');
 
 // WASM SQLite for Node/Electron with a Node-FS VFS (file-backed; no native .node)
 // const { Database } = require('node-sqlite3-wasm');
@@ -86,15 +90,11 @@ class DatabaseRepository extends BaseService {
       this.db.exec('PRAGMA synchronous=NORMAL;'); // use OFF only for one-time bulk loads
       this.db.exec('PRAGMA temp_store=MEMORY;');
 
-      const cacheKB = Number(configLoader.get('SQLITE_CACHE_SIZE_KB', 200 * 1024));
-      if (Number.isFinite(cacheKB) && cacheKB > 0) {
-        this.db.exec(`PRAGMA cache_size=-${Math.max(1024, cacheKB)};`);
-      }
+      const cacheKB = Number(SQLITE_CACHE_SIZE_KB);
+      this.db.exec(`PRAGMA cache_size=-${Math.max(1024, cacheKB)};`);
 
-      const mmap = Number(configLoader.get('SQLITE_MMAP_SIZE', 256 * 1024 * 1024));
-      if (Number.isFinite(mmap) && mmap > 0) {
-        this.db.exec(`PRAGMA mmap_size=${mmap};`);
-      }
+      const mmap = Number(SQLITE_MMAP_SIZE);
+      this.db.exec(`PRAGMA mmap_size=${mmap};`);
     } catch (e) {
       logger.warn('[DatabaseRepository] PRAGMA setup failed:', e);
     }
@@ -189,13 +189,32 @@ class DatabaseRepository extends BaseService {
     }
   }
 
-  getTransactionChunkSize(override) {
-    let size = Number(override ?? configLoader.get('SQLITE_TXN_CHUNK_SIZE', 200));
-    size = Math.trunc(size);
-    if (!Number.isFinite(size) || size <= 0) {
-      size = 200;
+  /**
+   * Finalize a prepared SQLite statement safely.
+   *
+   * Why this exists:
+   * - Prepared statements hold native SQLite resources.
+   * - Unfinalized read statements can keep locks longer than expected.
+   * - With separate read/write connections (main thread + disk worker),
+   *   lingering locks can surface as "database is locked" on writes.
+   *
+   * This helper centralizes cleanup so all query paths consistently release
+   * statement resources in `finally` blocks.
+   */
+  finalizeStatement(stmt, context) {
+    if (!stmt) {
+      return;
     }
-    return size;
+    try {
+      stmt.finalize();
+    } catch (e) {
+      logger.warn(`[SearchFunctionCommand] finalize ${context} stmt failed:`, e);
+    }
+  }
+
+  getTransactionChunkSize(override) {
+    const size = Math.trunc(override ?? SQLITE_TXN_CHUNK_SIZE);
+    return size > 0 ? size : 200;
   }
 
   async executeInTransaction(fn) {
@@ -217,7 +236,7 @@ class DatabaseRepository extends BaseService {
       if (!this.db) {throw new Error('Database not open');}
 
       const chunkTarget = args[0];
-      if (!Array.isArray(chunkTarget) || chunkTarget.length <= chunkSize) {
+      if (chunkTarget.length <= chunkSize) {
         await this.executeInTransaction(() => fn(...args));
         return;
       }
@@ -295,13 +314,13 @@ class DatabaseRepository extends BaseService {
 
           const rows = await this.getRecentFileCache(windowStartMs);
           for (const r of rows) {
-              if (r.functions) {
-                  try {
-                      functionIndex.set(r.file_name, JSON.parse(r.functions));
-                  } catch {
-                      functionIndex.set(r.file_name, []);
+                  if (r.functions) {
+                      try {
+                          functionIndex.set(r.file_name, JSON.parse(r.functions));
+                      } catch {
+                          functionIndex.set(r.file_name, []);
+                      }
                   }
-              }
           }
       } catch (e) {
           logger.error('[Indexer] loadStartupCache failed:', e);
@@ -312,26 +331,34 @@ class DatabaseRepository extends BaseService {
 
   async getRecentFileCache(windowStartMs) {
     const out = [];
+    let stmt = null;
     try {
-      const rows = await this.db.prepare(
+      stmt = this.db.prepare(
           'SELECT file_name, functions FROM file_cache WHERE last_accessed_at IS NOT NULL AND last_accessed_at >= ?'
-      ).all(windowStartMs);
+      );
+      const rows = await stmt.all(windowStartMs);
       out.push(...rows);
     } catch (e) {
       logger.error('[SearchFunctionCommand] getRecentFileCache failed:', e);
+    } finally {
+      this.finalizeStatement(stmt, 'getRecentFileCache');
     }
     return out;
   }
 
   async getOlderFileCache(windowStartMs, limit, offset) {
     const out = [];
+    let stmt = null;
     try {
-      const rows = await this.db.prepare(
+      stmt = this.db.prepare(
           `SELECT file_name, functions FROM file_cache WHERE (last_accessed_at IS NULL OR last_accessed_at < ?) ORDER BY last_accessed_at ASC LIMIT ${limit} OFFSET ${offset}`
-      ).all(windowStartMs);
+      );
+      const rows = await stmt.all(windowStartMs);
       out.push(...rows);
     } catch (e) {
       logger.error('[SearchFunctionCommand] getOlderFileCache failed:', e);
+    } finally {
+      this.finalizeStatement(stmt, 'getOlderFileCache');
     }
     return out;
   }
@@ -340,8 +367,8 @@ async getInodeModifiedAtBatch(limit = 1000) {
   const out = [];
   let stmt = null;
   try {
-    limit = Math.trunc(Number(limit));
-    if (!Number.isFinite(limit) || limit <= 0) limit = 1000;
+    limit = Math.trunc(limit);
+    if (limit <= 0) limit = 1000;
 
     stmt = this.db.prepare(
       'SELECT file_name, inode_modified_at FROM file_cache ' +
@@ -362,32 +389,20 @@ async getInodeModifiedAtBatch(limit = 1000) {
   } catch (e) {
     logger.error('[SearchFunctionCommand] getInodeModifiedAtBatch failed:', e);
   } finally {
-    try {
-      if (stmt) {
-        stmt.finalize();
-      }
-    } catch (e) {
-      logger.warn('[SearchFunctionCommand] finalize getInodeModifiedAtBatch stmt failed:', e);
-    }
+    this.finalizeStatement(stmt, 'getInodeModifiedAtBatch');
   }
   return out;
 }
 
   async getUserConfig() {
     const out = {};
+    let rowsStmt = null;
     try {
-      const exists = await this.db
-        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='user_config'")
-        .get();
-      if (!exists) {
-        return out;
-      }
-      const rows = await this.db
-        .prepare('SELECT config_key, config_value FROM user_config')
-        .all();
+      rowsStmt = this.db.prepare('SELECT config_key, config_value FROM user_config');
+      const rows = await rowsStmt.all();
       for (const r of rows) {
         if (!r || !r.config_key) { continue; }
-        if (typeof r.config_value === 'string' && r.config_value.length > 0) {
+        if (r.config_value.length > 0) {
           try {
             out[r.config_key] = JSON.parse(r.config_value);
           } catch {
@@ -397,6 +412,8 @@ async getInodeModifiedAtBatch(limit = 1000) {
       }
     } catch (e) {
       logger.error('[SearchFunctionCommand] getUserConfig failed:', e);
+    } finally {
+      this.finalizeStatement(rowsStmt, 'getUserConfig rowsStmt');
     }
     return out;
   }
@@ -455,14 +472,13 @@ async getInodeModifiedAtBatch(limit = 1000) {
     if (!data) {
       return;
     }
-    const entries = Array.isArray(data) ? data : Object.entries(data);
+    const entries = Object.entries(data);
     if (entries.length === 0) {
       return;
     }
     const rows = [];
     for (const [key, value] of entries) {
       if (!key) { continue; }
-      if (typeof value === 'undefined') { continue; }
       rows.push([key, JSON.stringify(value)]);
     }
     if (rows.length === 0) {
@@ -502,9 +518,11 @@ async getInodeModifiedAtBatch(limit = 1000) {
 
     const tx = this.transaction(async (rows) => {
       for (const [filePath, functionsArr] of rows) {
-        const functionsObj = Object.create(null);
-        for (const fn of functionsArr) functionsObj[fn.name] = fn; // last wins
-        const functionsJson = JSON.stringify(functionsObj);
+        const functionMap = new Map();
+        for (const fn of functionsArr) {
+          functionMap.set(fn.name, fn); // last wins
+        }
+        const functionsJson = JSON.stringify(Array.from(functionMap.values()));
 
         await upsertFileCache.run(filePath, functionsJson);
       }

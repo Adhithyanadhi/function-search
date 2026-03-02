@@ -25,11 +25,11 @@ class WorkerBus {
         this.sender.postMessage({ type: EXTRACT_FILE_NAMES, priority, payload });
     }
  
-    updateRegexConfig(payload, priority = 'high', resetinodemodifiedat = false, scanPayload = null) {
+    updateRegexConfig(payload, priority = 'high', resetInodeExtensions = [], scanPayload = null) {
         this.sender.postMessage({
             type: UPDATE_REGEX_CONFIG,
             priority,
-            payload: { regexConfig: payload, resetinodemodifiedat, scanPayload }
+            payload: { regexConfig: payload, resetInodeExtensions, scanPayload }
         });
     }
 
@@ -42,7 +42,7 @@ class WorkerBus {
     }
 
     setInodeModifiedAt(data, priority = 'low') {
-        this.sender.postMessage({ type: INODE_MODIFIED_AT, priority, payload: { map: data } });
+        this.sender.postMessage({ type: INODE_MODIFIED_AT, priority, payload: { data } });
     }
 }
 

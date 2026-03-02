@@ -1,6 +1,6 @@
 require('./logger');
 const path = require('path');
-const { get_invalid_dir_fragments, supportedExtensions } = require('../config/constants');
+const { get_invalid_dir_fragments, INODE_FOLDER_BUCKET } = require('../config/constants');
 
 function isSubsequence(sub, target) {
     let i = 0, j = 0;
@@ -56,35 +56,55 @@ function isExcluded(filePath) {
     return !filePath || get_invalid_dir_fragments().some(suffix => filePath.includes(suffix));
 }
 
-function normalizeUserConfig(cfg) {
-    const regexes = (cfg && cfg.regexes && typeof cfg.regexes === 'object' && !Array.isArray(cfg.regexes))
-        ? cfg.regexes
-        : {};
-    const ignore = (cfg && Array.isArray(cfg.ignore)) ? cfg.ignore : [];
-    return { regexes, ignore };
+// Contract: deep equality is only used with JSON-safe config values.
+function deepEqual(a, b) {
+    return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function deepEqual(a, b) {
-    if (a === b) { return true; }
-    if (typeof a !== typeof b) { return false; }
-    if (a && b && typeof a === 'object') {
-        if (Array.isArray(a) !== Array.isArray(b)) { return false; }
-        if (Array.isArray(a)) {
-            if (a.length !== b.length) { return false; }
-            for (let i = 0; i < a.length; i++) {
-                if (!deepEqual(a[i], b[i])) { return false; }
-            }
-            return true;
-        }
-        const aKeys = Object.keys(a);
-        const bKeys = Object.keys(b);
-        if (aKeys.length !== bKeys.length) { return false; }
-        for (const k of aKeys) {
-            if (!deepEqual(a[k], b[k])) { return false; }
-        }
-        return true;
+function getInodeBucketForPath(filePath) {
+    const ext = path.extname(filePath || '');
+    return ext || INODE_FOLDER_BUCKET;
+}
+
+function toInodeBucketMap(fileMap) {
+    if (fileMap instanceof Map) {
+        return fileMap;
     }
-    return false;
+    const bucket = new Map();
+    for (const [filePath, modifiedAt] of Object.entries(fileMap || {})) {
+        bucket.set(filePath, modifiedAt);
+    }
+    return bucket;
+}
+
+function partitionInodeModifiedAt(flatInodeMap) {
+    const data = new Map();
+    if (!flatInodeMap) {
+        return data;
+    }
+
+    for (const [filePath, modifiedAt] of flatInodeMap.entries()) {
+        if (!filePath) {
+            continue;
+        }
+        const ext = getInodeBucketForPath(filePath);
+        const bucket = data.get(ext) || new Map();
+        bucket.set(filePath, modifiedAt);
+        data.set(ext, bucket);
+    }
+    return data;
+}
+
+function flattenInodeModifiedAtEntries(entries) {
+    const flat = [];
+    const sourceEntries = entries instanceof Map ? entries.entries() : (entries || []);
+    for (const [, fileMap] of sourceEntries) {
+        const bucket = toInodeBucketMap(fileMap);
+        for (const [filePath, modifiedAt] of bucket.entries()) {
+            flat.push([filePath, modifiedAt]);
+        }
+    }
+    return flat;
 }
 
 module.exports = {
@@ -95,8 +115,9 @@ module.exports = {
     isExcluded,
     resetInterval,
     getSetFromListFunction,
-    normalizeUserConfig,
-    deepEqual
+    deepEqual,
+    getInodeBucketForPath,
+    toInodeBucketMap,
+    partitionInodeModifiedAt,
+    flattenInodeModifiedAtEntries
 };
-
-

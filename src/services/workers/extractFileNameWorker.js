@@ -1,10 +1,12 @@
 const logger = require('../../utils/logger');
-const { getExtensionFromFilePath } = require('../../utils/common')
-const { FUNCTION_EXTRACT_FILE_PATH, supportedExtensions, PROCESS_FILE_TIME_OUT, MAX_INGRES_X_FUNCTION, X_FUNCTION_INGRES_TIMEOUT, get_invalid_dir_fragments,  set_invalid_dir_fragments } = require('../../config/constants');
+const {
+	getExtensionFromFilePath,
+	isExcluded
+} = require('../../utils/common')
+const { FUNCTION_EXTRACT_FILE_PATH, supportedExtensions, PROCESS_FILE_TIME_OUT, MAX_INGRES_X_FUNCTION, set_invalid_dir_fragments, INODE_FOLDER_BUCKET } = require('../../config/constants');
 const { Worker, parentPort } = require('worker_threads');
 const { createParentBus, createChildBus } = require('../../services/messaging/workerBus');
 const { EXTRACT_FUNCTION_NAMES, EXTRACT_FILE_NAMES, INODE_MODIFIED_AT, FETCHED_FUNCTIONS, UPDATE_REGEX_CONFIG, UPDATE_IGNORE_CONFIG } = require('../../config/constants');
-const {isExcluded} = require('../../utils/common')
 
 const fs = require('fs');
 const path = require('path');
@@ -16,14 +18,44 @@ createFunctionWorker();
 const parentBus = createParentBus(parentPort);
 const childBus = createChildBus(functionWorker);
 
+// Structure:
+// inodeModifiedAt = Map<ext, Map<filePath, mtimeMs>>
+// Example:
+//   '.js' => Map { '/workspace/src/a.js' => 1730000000000 }
+//   'folder' => Map { '/workspace/src' => 1730000000100 }
 let inodeModifiedAt = new Map();
-let inodeModifiedAtUpdates = new Map();
+const inodeModifiedAtUpdates = new Map();
 const highPriorityFileQueue = [];
 const lowPriorityFileQueue = [];
 let idle = true;
 const debounceMap = new Map();
 let updateInodeModifiedAtTimer = null;
 let ingress = 0;
+
+function ensureInodeBucket(store, extension) {
+	const bucket = store.get(extension);
+	if (bucket) {
+		return bucket;
+	}
+	const nextBucket = new Map();
+	store.set(extension, nextBucket);
+	return nextBucket;
+}
+
+function getInodeLastSeen(fullPath, extension) {
+	const bucket = inodeModifiedAt.get(extension);
+	if (!bucket) {
+		return 0;
+	}
+	return bucket.get(fullPath) || 0;
+}
+
+function resetInodeExtensions(extensions) {
+	for (const ext of extensions) {
+		inodeModifiedAt.delete(ext);
+		inodeModifiedAtUpdates.delete(ext);
+	}
+}
 
 async function processFiles() {
 	if (!idle) {return;}
@@ -51,15 +83,17 @@ async function processFiles() {
 	idle = true;
 }
 
-function updateInodeModifiedAt(fullPath, at){
-	inodeModifiedAt.set(fullPath, at);
-	inodeModifiedAtUpdates.set(fullPath, at);
+function updateInodeModifiedAt(fullPath, at, extension){
+	for (const store of [inodeModifiedAt, inodeModifiedAtUpdates]) {
+		ensureInodeBucket(store, extension).set(fullPath, at);
+	}
 	if(updateInodeModifiedAtTimer){
 		clearTimeout(updateInodeModifiedAtTimer);
 	}
 	updateInodeModifiedAtTimer = setTimeout(() => {
-		const payload = new Map(inodeModifiedAtUpdates);
-		parentBus.postMessage(INODE_MODIFIED_AT, payload);
+		parentBus.postMessage(INODE_MODIFIED_AT, {
+			data: new Map(inodeModifiedAtUpdates)
+		});
 		inodeModifiedAtUpdates.clear();
 		updateInodeModifiedAtTimer = null;
 	}, 5000);
@@ -67,7 +101,7 @@ function updateInodeModifiedAt(fullPath, at){
 
 async function extractFileNames(task) {
 	logger.debug("new task extractfilenames", task.filePath, task.extension);
-	const files = preprocessFiles(task.filePath, task.extension);
+	const files = preprocessFiles(task.filePath, task.extension, task);
 
 	for (const filePath of files) {
 		const fileExtension = getExtensionFromFilePath(filePath);
@@ -87,8 +121,11 @@ async function extractFileNames(task) {
 	}
 }
 
-function preprocessFiles(absoluteFilePath, extension) {
+function preprocessFiles(absoluteFilePath, extension, task = {}) {
 	const filesToProcess = [];
+	const forceDirectoryTraversal = task.forceDirectoryTraversal === true;
+	const targetExtensionsList = task.targetExtensions ?? [];
+	const targetExtensions = new Set(targetExtensionsList);
 
 	if (extension !== '__all__' && !supportedExtensions.includes(extension)) {
 		return filesToProcess;
@@ -102,21 +139,32 @@ function preprocessFiles(absoluteFilePath, extension) {
 			}
 
 			const stat = fs.statSync(fullPath);
-			const lastSeen = inodeModifiedAt.get(fullPath) || 0;
+			const isDirectory = stat.isDirectory();
+			const inodeExtension = isDirectory
+				? INODE_FOLDER_BUCKET
+				: (path.extname(fullPath) || INODE_FOLDER_BUCKET);
+				const lastSeen = getInodeLastSeen(fullPath, inodeExtension);
 
-
-			if (stat.mtimeMs <= lastSeen) {
+			if (isDirectory && !forceDirectoryTraversal && stat.mtimeMs <= lastSeen) {
 				return;
 			}
 
-			if (stat.isDirectory()) {
-				updateInodeModifiedAt(fullPath, stat.mtimeMs);
+			if (isDirectory) {
+				updateInodeModifiedAt(fullPath, stat.mtimeMs, inodeExtension);
 				fs.readdirSync(fullPath).forEach(entry => {
 					readDirRecursive(path.join(fullPath, entry));
 				});
-			} else if (fullPath.endsWith(extension) || (extension === '__all__' && supportedExtensions.some(ext => fullPath.endsWith(ext)))) {
-					updateInodeModifiedAt(fullPath, stat.mtimeMs);
+			} else {
+				if (targetExtensions.size > 0 && !targetExtensions.has(inodeExtension)) {
+					return;
+				}
+				if (stat.mtimeMs <= lastSeen) {
+					return;
+				}
+				if (fullPath.endsWith(extension) || (extension === '__all__' && supportedExtensions.some(ext => fullPath.endsWith(ext)))) {
+					updateInodeModifiedAt(fullPath, stat.mtimeMs, inodeExtension);
 					filesToProcess.push(fullPath);
+				}
 			}
         } catch (err) {
             logger.error(`Failed to stat: ${fullPath}`, err);
@@ -216,13 +264,11 @@ function serve(message) {
 		}
 	} else if (message.type === INODE_MODIFIED_AT) {
 		logger.debug('[Worker:extractFileName] set inodeModifiedAt map');
-		inodeModifiedAt = message.payload && message.payload.map;
+		inodeModifiedAt = message.payload?.data || new Map();
 	} else if (message.type === UPDATE_REGEX_CONFIG) {
 		logger.debug('[Worker:extractFileName] update regex config');
 		const payload = message.payload || {};
-		if (payload.resetinodemodifiedat) {
-			inodeModifiedAt = new Map();
-		}
+		resetInodeExtensions(payload.resetInodeExtensions);
 		childBus.postMessage(message.type, payload.regexConfig, message.priority);
 		if (payload.scanPayload) {
 			highPriorityFileQueue.push(payload.scanPayload);
@@ -233,6 +279,7 @@ function serve(message) {
 		const payload = message.payload || {};
 		if (payload.resetinodemodifiedat) {
 			inodeModifiedAt = new Map();
+			inodeModifiedAtUpdates.clear();
 		}
 		set_invalid_dir_fragments(payload.ignoreConfig);
 		if (payload.scanPayload) {
@@ -246,9 +293,9 @@ function serve(message) {
 
 childBus.on(FETCHED_FUNCTIONS, (message) => {
 	ingress--;
-	const p = message.payload || {};
-	logger.debug('[Worker:extractFileName] emitting fetchedFunctions for', p.filePath, 'count=', (p.functions||[]).length);
-	if(p.functions !== null || p.functions.length > 0){
+	const p = message.payload;
+	logger.debug('[Worker:extractFileName] emitting fetchedFunctions for', p.filePath, 'count=', p.functions.length);
+	if (p.functions.length > 0) {
 		parentBus.postMessage(FETCHED_FUNCTIONS, p, 'low');
 	}
 });

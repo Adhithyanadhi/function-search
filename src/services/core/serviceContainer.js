@@ -76,7 +76,7 @@ class ServiceContainer {
      */
     async dispose() {
         for (const [name, instance] of this.singletons) {
-            if (instance && typeof instance.dispose === 'function') {
+            if (instance) {
                 try {
                     await instance.dispose();
                 } catch (e) {

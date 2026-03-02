@@ -1,6 +1,6 @@
 const logger = require('../../utils/logger');
 const { BaseService } = require('../core/baseService');
-const { configLoader } = require('../../config/configLoader');
+const { FILESYSTEM_CACHE_ENABLED } = require('../../config/constants');
 
 /**
  * File System Service - Enhanced file operations with caching
@@ -11,7 +11,7 @@ class FileSystemService extends BaseService {
         this.fs = require('fs');
         this.path = require('path');
         this.cache = new Map();
-        this.cacheEnabled = configLoader.get('FILESYSTEM_CACHE_ENABLED', true);
+        this.cacheEnabled = FILESYSTEM_CACHE_ENABLED;
     }
 
     /**

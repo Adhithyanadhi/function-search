@@ -69,13 +69,9 @@ async function deleteOlderCacheFilesInDbDir() {
 }
 
 function getWorkspacePath() {
-  const ws =
-    (vscode.workspace && Array.isArray(vscode.workspace.workspaceFolders) && vscode.workspace.workspaceFolders[0] && vscode.workspace.workspaceFolders[0].uri && vscode.workspace.workspaceFolders[0].uri.fsPath)
-      ? vscode.workspace.workspaceFolders[0].uri.fsPath
-      : (vscode.workspace && vscode.workspace.rootPath)
-        ? vscode.workspace.rootPath
-        : (vscode.window.activeTextEditor ? path.dirname(vscode.window.activeTextEditor.document.fileName) : undefined);
-  return ws;
+  return vscode.workspace?.workspaceFolders?.[0]?.uri?.fsPath
+    || vscode.workspace?.rootPath
+    || (vscode.window.activeTextEditor ? path.dirname(vscode.window.activeTextEditor.document.fileName) : undefined);
 }
 
 function getWorkspaceFolder(workspacePath) {

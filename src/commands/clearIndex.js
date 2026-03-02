@@ -47,6 +47,7 @@ class ClearIndexCommand extends BaseCommand {
             }
 
             this.indexerService.functionIndex.clear();
+            this.indexerService.inodeModifiedAt.clear();
             this.indexerService.cachedFunctionList = [];
             this.indexerService.fileToRangeMap.clear();
             this.indexerService.prioritizeCurrentFileExtHandler();
@@ -54,7 +55,7 @@ class ClearIndexCommand extends BaseCommand {
 
             vscode.window.showInformationMessage("Function index cleared. Reindexing...");
             if (this.indexerService.bus && workspacePath) {
-                this.indexerService.bus.setInodeModifiedAt(new Map(), 'high');
+                this.indexerService.bus.setInodeModifiedAt({}, 'high');
                 this.indexerService.deleteAllCache();
                 this.indexerService.bus.extractFileNames({ workspacePath, filePath: workspacePath, extension: "__all__", initialLoad: true }, 'low');
             }
@@ -66,5 +67,4 @@ class ClearIndexCommand extends BaseCommand {
 }
 
 module.exports = { ClearIndexCommand };
-
 

@@ -1,11 +1,12 @@
 const fs = require('fs');
 const path = require('path');
-const { loadEnv } = require('./env');
-
-loadEnv();
+const {
+    FUNCTION_SEARCH_LOG_LEVEL,
+    FUNCTION_SEARCH_MAX_LOG_SIZE_BYTES
+} = require('../config/constants');
 
 const LEVELS = { off: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
-const envLevel = (process.env.FUNCTION_SEARCH_LOG_LEVEL || 'error').toLowerCase();
+const envLevel = FUNCTION_SEARCH_LOG_LEVEL.toLowerCase();
 const CURRENT_LEVEL = LEVELS[envLevel] != null ? LEVELS[envLevel] : LEVELS.error;
 
 
@@ -14,7 +15,7 @@ try { fs.mkdirSync(logDir, { recursive: true }); } catch {}
 
 const logFile = path.join(logDir, 'output.log');
 
-const MAX_LOG_SIZE = parseInt(process.env.FUNCTION_SEARCH_MAX_LOG_SIZE_BYTES || '', 10) || (5 * 1024 * 1024);
+const MAX_LOG_SIZE = FUNCTION_SEARCH_MAX_LOG_SIZE_BYTES;
 function deleteIfTooLarge(filePath) {
     try {
         const st = fs.existsSync(filePath) ? fs.statSync(filePath) : null;

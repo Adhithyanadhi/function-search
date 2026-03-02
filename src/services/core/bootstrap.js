@@ -65,7 +65,7 @@ class ServiceBootstrap {
         for (const serviceName of initOrder) {
             try {
                 const service = this.container.get(serviceName);
-                if (service && typeof service.initialize === 'function') {
+                if (service) {
                     await service.initialize();
                     console.log(`[ServiceBootstrap] Initialized: ${serviceName}`);
                 }

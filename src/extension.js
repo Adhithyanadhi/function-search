@@ -4,8 +4,23 @@ const { initializeEnvironment, getDBDir, deleteOlderCacheFilesInDbDir } = requir
 const { SearchFunctionCommand } = require('./commands/searchFunction');
 const { ClearIndexCommand } = require('./commands/clearIndex');
 const { WriteToCacheCommand } = require('./commands/writeToCache');
-const { normalizeUserConfig, deepEqual } = require('./utils/common');
+const { deepEqual } = require('./utils/common');
 const pkg = require('../package.json');
+
+function getChangedRegexExtensions(currentRegexes, nextRegexes) {
+	const current = currentRegexes;
+	const next = nextRegexes;
+	const changed = [];
+	const keys = new Set([...Object.keys(current), ...Object.keys(next)]);
+	for (const ext of keys) {
+		const currentPatterns = current[ext] ?? [];
+		const nextPatterns = next[ext] ?? [];
+		if (!deepEqual(currentPatterns, nextPatterns)) {
+			changed.push(ext);
+		}
+	}
+	return changed;
+}
 
 /**
  * @param {import('vscode').ExtensionContext} context
@@ -50,10 +65,13 @@ async function activate(context) {
         return;
     }
 
-	let currentUserConfig = normalizeUserConfig({});
+	let currentUserConfig = { regexes: {}, ignore: [] };
 	const applyUserConfigChange = (nextConfig) => {
 		const regexChanged = !deepEqual(currentUserConfig.regexes, nextConfig.regexes);
 		const ignoreChanged = !deepEqual(currentUserConfig.ignore, nextConfig.ignore);
+		const changedRegexExtensions = regexChanged
+			? getChangedRegexExtensions(currentUserConfig.regexes, nextConfig.regexes)
+			: [];
 		if (!regexChanged && !ignoreChanged) {
 			return;
 		}
@@ -64,7 +82,7 @@ async function activate(context) {
 		indexerService.writeUserConfigToDB(diff);
 
 		if (regexChanged) {
-			indexerService.updateUserRegexConfig(nextConfig.regexes, true);
+			indexerService.updateUserRegexConfig(nextConfig.regexes, changedRegexExtensions);
 			currentUserConfig.regexes = nextConfig.regexes;
 		}
 		if (ignoreChanged) {
@@ -74,12 +92,18 @@ async function activate(context) {
 	};
 
 	try {
-		const storedConfig = normalizeUserConfig(await dbRepo.getUserConfig());
+		const storedRawConfig = await dbRepo.getUserConfig();
+		const storedConfig = {
+			regexes: storedRawConfig?.regexes ?? {},
+			ignore: storedRawConfig?.ignore ?? []
+		};
 		const config = vscode.workspace.getConfiguration('function-name-search');
-		const settingsConfig = normalizeUserConfig({
+		const settingsConfig = {
 			regexes: config.get('regexes'),
 			ignore: config.get('ignore')
-		});
+		};
+		settingsConfig.regexes = settingsConfig.regexes ?? {};
+		settingsConfig.ignore = settingsConfig.ignore ?? [];
 
         await indexerService.activate(context, settingsConfig);
 		currentUserConfig = settingsConfig;
@@ -110,10 +134,12 @@ async function activate(context) {
 		}
 
 		const config = vscode.workspace.getConfiguration('function-name-search');
-		const nextConfig = normalizeUserConfig({
+		const nextConfig = {
 			regexes: config.get('regexes'),
 			ignore: config.get('ignore')
-		});
+		};
+		nextConfig.regexes = nextConfig.regexes ?? {};
+		nextConfig.ignore = nextConfig.ignore ?? [];
 		applyUserConfigChange(nextConfig);
 	});
 

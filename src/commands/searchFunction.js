@@ -1,11 +1,13 @@
 const vscode = require('vscode');
 const { BaseCommand } = require('../services/commands/baseCommand');
 const { QuickPickService } = require('../services/quickpick');
-const { getDBDir } = require('../utils/vscode');
 const { getExtensionFromFilePath } = require('../utils/common');
-const { MILLISECONDS_PER_DAY } = require('../config/constants');
+const {
+    MILLISECONDS_PER_DAY,
+    FUNCTION_SEARCH_TIME_WINDOW_DAYS,
+    FUNCTION_SEARCH_MAX_SQL_CANDIDATES
+} = require('../config/constants');
 const { prepareFunctionProperties } = require('../services/indexer');
-const logger = require('../utils/logger');
 const { isSubsequence } = require('../utils/common');
 
 class SearchFunctionCommand extends BaseCommand {
@@ -53,14 +55,12 @@ class SearchFunctionCommand extends BaseCommand {
 
                     // Initialize time window once
                     if (this.fallbackWindowStartMs == null) {
-                        const days = Number(process.env.FUNCTION_SEARCH_TIME_WINDOW_DAYS);
+                        const days = FUNCTION_SEARCH_TIME_WINDOW_DAYS;
                         this.fallbackWindowStartMs = Date.now() - (days * MILLISECONDS_PER_DAY);
                     }
 
-                    const baseDir = getDBDir();
-
                     const matches = [];
-                    const limit = Number(process.env.FUNCTION_SEARCH_MAX_SQL_CANDIDATES);
+                    const limit = FUNCTION_SEARCH_MAX_SQL_CANDIDATES;
 
                     // Safety: don’t loop forever in a bug
                     let fallbackOffset = 0;
@@ -80,7 +80,8 @@ class SearchFunctionCommand extends BaseCommand {
                             } catch {
                                 continue;
                             }
-                            if (functions == null || functions.length === 0) {
+
+                            if (functions.length === 0) {
                                 continue;
                             }
 
@@ -92,9 +93,9 @@ class SearchFunctionCommand extends BaseCommand {
                             const extension = getExtensionFromFilePath(r.file_name);
                             const iconPath = this.iconResolver.getIconPath(extension);
 
-                            for (const [fnName, f] of Object.entries(functions ?? {})) {
-                                if (isSubsequence(queryTerm, fnName.toLowerCase())) {
-                                    matches.push(f);
+                            for (const f of functions) {
+                                if (isSubsequence(queryTerm, f.name.toLowerCase())) {
+                                    matches.push(prepareFunctionProperties(f, r.file_name, iconPath, extension));
                                 }
                             }
                         }

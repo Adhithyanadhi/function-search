@@ -1,6 +1,13 @@
 const vscode = require('vscode');
 const { BaseService } = require('./core/baseService');
-const { getDirPath, getExtensionFromFilePath, prioritizeCurrentFileExt, resetInterval } = require("../utils/common");
+const {
+    getDirPath,
+    getExtensionFromFilePath,
+    prioritizeCurrentFileExt,
+    resetInterval,
+    partitionInodeModifiedAt,
+    flattenInodeModifiedAtEntries
+} = require("../utils/common");
 const { initializeEnvironment, getDBDir, getWorkspacePath } = require("../utils/vscode");
 const { watchForChanges } = require("./watcher");
 const { WorkerManager } = require('./workerManager');
@@ -19,6 +26,7 @@ const {
     supportedExtensions,
     FILE_EXTRACT_FILE_PATH,
     MILLISECONDS_PER_DAY,
+    FUNCTION_SEARCH_TIME_WINDOW_DAYS,
     INIT_DB,
     DB_READY,
     DB_INIT_FAILED,
@@ -43,27 +51,33 @@ function prepareFunctionProperties(f, file, iconPath, extension) {
 
 
 
-// helper: merge defaults + user regex into a JSON-serializable config
-function buildRegexConfig(userConfig) {
+// Contract: userConfig is Record<string, string[]>, extensions is string[].
+function buildRegexConfig(userConfig = {}, extensions = []) {
   const result = {};
+  const extensionFilter = extensions.length > 0
+    ? new Set(extensions)
+    : null;
+  if (extensionFilter) {
+    for (const ext of extensionFilter) {
+      result[ext] = [];
+    }
+  }
 
   // 1. defaults from FILE_PROPERTIES
   for (const [ext, props] of Object.entries(FILE_PROPERTIES)) {
+    if (extensionFilter && !extensionFilter.has(ext)) { continue; }
     result[ext] ??= [];
     result[ext].push(...props.regex);
   }
 
   // 2. extensions only in userConfig
-  if (userConfig) {
-    for (const [ext, patterns] of Object.entries(userConfig)) {
-      if (!Array.isArray(patterns)) continue;
-
-      for (const p of patterns) {
-        if (typeof p === 'string' && p.trim()) {
-          result[ext] ??= [];
-          const reg = new RegExp(p);
-          result[ext].push(reg);
-        }
+  for (const [ext, patterns] of Object.entries(userConfig)) {
+    if (extensionFilter && !extensionFilter.has(ext)) { continue; }
+    for (const p of patterns) {
+      if (p.trim()) {
+        result[ext] ??= [];
+        const reg = new RegExp(p);
+        result[ext].push(reg);
       }
     }
   }
@@ -71,24 +85,22 @@ function buildRegexConfig(userConfig) {
   return result;
 }
 
-function buildIgnoreConfig(userConfig) {
+// Contract: userConfig is string[].
+function buildIgnoreConfig(userConfig = []) {
   const result = [];
 
   // 1. defaults from INVALID_DIR_FRAGMENTS
   result.push(...get_invalid_dir_fragments());
 
   // 2. extensions only in userConfig
-  if (userConfig) {
-      for (const p of userConfig) {
-        if (typeof p === 'string' && p.trim()) {
-          result.push(p);
-        }
+  for (const p of userConfig) {
+    if (p.trim()) {
+      result.push(p);
     }
   }
 
   return result;
 }
-
 
 class IndexerService extends BaseService {
     constructor(container) {
@@ -142,11 +154,11 @@ class IndexerService extends BaseService {
     initWorkers(initialConfig = null) {
         this.fileWorker = new WorkerManager(FILE_EXTRACT_FILE_PATH);
         this.bus = new WorkerBus(this.fileWorker.worker, this.fileWorker);
-        this.bus.updateRegexConfig(buildRegexConfig(null));
+        this.bus.updateRegexConfig(buildRegexConfig());
 
         if (initialConfig) {
             if (initialConfig.regexes) {
-                this.bus.updateRegexConfig(buildRegexConfig(initialConfig.regexes), 'high', false, null);
+                this.bus.updateRegexConfig(buildRegexConfig(initialConfig.regexes), 'high', [], null);
             }
             if (initialConfig.ignore) {
                 this.bus.updateIgnoreConfig(buildIgnoreConfig(initialConfig.ignore), 'high', false, null);
@@ -156,22 +168,29 @@ class IndexerService extends BaseService {
         this.createDiskWorker();
         this.functionIndex.setFlushToDisk(this.flushToDisk.bind(this, 'functionIndex'));
         this.lastAccessIndex.setFlushToDisk(this.flushToDisk.bind(this, 'lastAccess'));
-        this.inodeModifiedAt.setFlushToDisk(this.flushToDisk.bind(this, 'inodeModifiedAt'));
+        this.inodeModifiedAt.setFlushToDisk((entries) =>
+            this.flushToDisk('inodeModifiedAt', flattenInodeModifiedAtEntries(entries))
+        );
         this.bus.bind();
         this.bus.on(FETCHED_FUNCTIONS, (m) => {
-            const p = m.payload || {};
-            logger.debug('[Indexer] Received fetchedFunctions for', p.filePath, 'count=', (p.functions||[]).length);
-            if (p.filePath && p.functions) {
+            const p = m.payload;
+            logger.debug('[Indexer] Received fetchedFunctions for', p.filePath, 'count=', p.functions.length);
+            if (p.filePath) {
                 this.functionIndex.set(p.filePath, p.functions);
                 this.updateCacheHandler(p.filePath);
             }
         });
 
         this.bus.on(INODE_MODIFIED_AT, (m) => {
-            const p = m.payload || {};
+            const p = m.payload;
             logger.debug('[Indexer] Received inodeModifedAt');
-            for(const [fileName, inodeModifedAt] of p.entries()){
-                this.inodeModifiedAt.set(fileName, inodeModifedAt);
+            const data = p.data;
+            for (const [ext, updates] of (data || new Map()).entries()) {
+                const current = this.inodeModifiedAt.get(ext) || new Map();
+                for (const [filePath, modifiedAt] of updates.entries()) {
+                    current.set(filePath, modifiedAt);
+                }
+                this.inodeModifiedAt.set(ext, current);
             }
         });
 
@@ -204,16 +223,28 @@ class IndexerService extends BaseService {
     /**
      * Called from extension.js whenever settings change.
      * @param {Record<string, string[]>} userConfig
+     * @param {string[]} changedExtensions
      */
-    updateUserRegexConfig(userConfig, isModified = false) {
+    updateUserRegexConfig(userConfig, changedExtensions = []) {
+        const extensionsToUpdate = changedExtensions;
+        if (extensionsToUpdate.length === 0) {
+            return;
+        }
         this.bus.updateRegexConfig(
-            buildRegexConfig(userConfig),
+            buildRegexConfig(userConfig, extensionsToUpdate),
             'high',
-            isModified,
-            isModified ? { workspacePath: this.workspacePath, filePath: this.workspacePath, extension: "__all__", initialLoad: true } : null
+            extensionsToUpdate,
+            {
+                workspacePath: this.workspacePath,
+                filePath: this.workspacePath,
+                extension: "__all__",
+                initialLoad: true,
+                forceDirectoryTraversal: true,
+                targetExtensions: extensionsToUpdate
+            }
         );
-        if (isModified) {
-            this.inodeModifiedAt.clear();
+        for (const ext of extensionsToUpdate) {
+            this.inodeModifiedAt.delete(ext);
         }
     }
 
@@ -240,11 +271,11 @@ class IndexerService extends BaseService {
 
     async loadFromDiskOnStartup() {
         try {
-            const days = Number(process.env.FUNCTION_SEARCH_TIME_WINDOW_DAYS);
+            const days = FUNCTION_SEARCH_TIME_WINDOW_DAYS;
             const windowStartMs = Date.now() - (days * MILLISECONDS_PER_DAY);
             const data = await this.dbRepo.loadStartupCache(getDBDir(), windowStartMs);
             this.functionIndex.load(data.functionIndex);
-            this.inodeModifiedAt.load(data.inodeModifiedAt);
+            this.inodeModifiedAt.load(partitionInodeModifiedAt(data.inodeModifiedAt));
             logger.info('[Indexer] Loaded from DB:', this.inodeModifiedAt.size,    this.functionIndex.size);
         } catch (err) {
             logger.error("Failed to load DB caches:", err);
@@ -449,16 +480,10 @@ class IndexerService extends BaseService {
         this.diskWorker.postMessage(payload);
     }
 
-    async flushToDisk(writeKey, toWriteBuffer) {
+    async flushToDisk(writeKey, entries) {
         if (!writeKey) {
             return;
         }
-
-        const entries = toWriteBuffer instanceof Map
-            ? Array.from(toWriteBuffer.entries())
-            : Array.isArray(toWriteBuffer)
-                ? toWriteBuffer
-                : [];
 
         if (entries.length === 0) {
             return;
@@ -534,14 +559,16 @@ class IndexerService extends BaseService {
 
 
     writeCacheToDB() {
-        this.diskWorkerPostMessage({ 
+        void this.diskWorkerPostMessage({ 
             type: WRITE_CACHE_TO_FILE, 
             payload: {
                 dbPath: getDBDir(), 
                 functionIndex: this.functionIndex.getNewData(), 
                 lastAccess: this.lastAccessIndex.getNewData(),
-                inodeModifiedAt: this.inodeModifiedAt.getNewData()
+                inodeModifiedAt: flattenInodeModifiedAtEntries(this.inodeModifiedAt.getNewData())
             }
+        }).catch((err) => {
+            logger.error('[Indexer] writeCacheToDB failed:', err);
         });
         this.functionIndex.clearNewBuffer();
         this.inodeModifiedAt.clearNewBuffer();
@@ -552,7 +579,7 @@ class IndexerService extends BaseService {
         if (!userConfig) { return; }
         const dbPath = getDBDir();
         if (!dbPath) { return; }
-        this.diskWorkerPostMessage({
+        void this.diskWorkerPostMessage({
             type: WRITE_CACHE_TO_FILE,
             payload: {
                 dbPath,
@@ -561,11 +588,15 @@ class IndexerService extends BaseService {
                 inodeModifiedAt: [],
                 userConfig
             }
+        }).catch((err) => {
+            logger.error('[Indexer] writeUserConfigToDB failed:', err);
         });
     }
 
     deleteAllCache() {
-        this.diskWorkerPostMessage({ type: DELETE_ALL_CACHE, payload: {dbPath: getDBDir()} });
+        void this.diskWorkerPostMessage({ type: DELETE_ALL_CACHE, payload: {dbPath: getDBDir()} }).catch((err) => {
+            logger.error('[Indexer] deleteAllCache failed:', err);
+        });
     }
 
     async activate(context, initialConfig = null) {
